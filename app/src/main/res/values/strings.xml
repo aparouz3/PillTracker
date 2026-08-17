@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PillTracker</string>
+    <string name="add_expense">افزودن هزینه</string>
+    <string name="add_income">افزودن درآمد</string>
+    <string name="title">عنوان</string>
+    <string name="amount">مبلغ</string>
+    <string name="save">ذخیره</string>
+    <string name="cancel">لغو</string>
+    <string name="expense">هزینه</string>
+    <string name="income">درآمد</string>
+    <string name="total_income">مجموع درآمد</string>
+    <string name="total_expense">مجموع هزینه</string>
+    <string name="balance">موجودی</string>
+    <string name="no_transactions">هنوز تراکنشی ثبت نشده</string>
+    <string name="today">امروز</string>
+    <string name="delete">حذف</string>
+    <string name="confirm_delete">آیا از حذف این تراکنش اطمینان دارید؟</string>
+    <string name="yes">بله</string>
+    <string name="no">خیر</string>
+    <string name="title_hint">عنوان تراکنش</string>
+    <string name="amount_hint">مبلغ به تومان</string>
+    <string name="january">فروردین</string>
+    <string name="february">اردیبهشت</string>
+    <string name="march">خرداد</string>
+    <string name="april">تیر</string>
+    <string name="may">مرداد</string>
+    <string name="june">شهریور</string>
+    <string name="july">مهر</string>
+    <string name="august">آبان</string>
+    <string name="september">آذر</string>
+    <string name="october">دی</string>
+    <string name="november">بهمن</string>
+    <string name="december">اسفند</string>
+</resources>
