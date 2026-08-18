@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/navCalendar"
+        android:icon="@android:drawable/ic_menu_month"
+        android:title="تقویم کامل" />
+    <item
+        android:id="@+id/navStats"
+        android:icon="@android:drawable/ic_menu_agenda"
+        android:title="جمع هفتگی / ماهانه / سالانه" />
+</menu>

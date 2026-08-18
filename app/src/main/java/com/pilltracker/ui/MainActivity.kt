@@ -1,23 +1,24 @@
 package com.pilltracker.ui
 
-import android.app.DatePickerDialog
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.widget.doAfterTextChanged
+import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.android.material.navigation.NavigationView
 import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
 import com.pilltracker.PillTrackerApp
 import com.pilltracker.R
 import com.pilltracker.data.Transaction
@@ -41,14 +42,12 @@ class MainActivity : AppCompatActivity() {
     private var currentDay: Int = 0
 
     // UI
+    private lateinit var drawerLayout: DrawerLayout
+    private lateinit var menuButton: ImageButton
     private lateinit var dateHeader: TextView
-    private lateinit var prevDayBtn: MaterialButton
-    private lateinit var nextDayBtn: MaterialButton
-    private lateinit var todayBtn: MaterialButton
-    private lateinit var calendarGrid: ViewGroup
-    private lateinit var monthYearText: TextView
-    private lateinit var prevMonthBtn: MaterialButton
-    private lateinit var nextMonthBtn: MaterialButton
+    private lateinit var prevDayBtn: ImageButton
+    private lateinit var nextDayBtn: ImageButton
+    private lateinit var dayStrip: LinearLayout
     private lateinit var recyclerView: RecyclerView
     private lateinit var summaryIncome: TextView
     private lateinit var summaryExpense: TextView
@@ -103,14 +102,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
+        drawerLayout = findViewById(R.id.drawerLayout)
+        menuButton = findViewById(R.id.menuButton)
         dateHeader = findViewById(R.id.dateHeader)
         prevDayBtn = findViewById(R.id.prevDayBtn)
         nextDayBtn = findViewById(R.id.nextDayBtn)
-        todayBtn = findViewById(R.id.todayBtn)
-        calendarGrid = findViewById(R.id.calendarGrid)
-        monthYearText = findViewById(R.id.monthYearText)
-        prevMonthBtn = findViewById(R.id.prevMonthBtn)
-        nextMonthBtn = findViewById(R.id.nextMonthBtn)
+        dayStrip = findViewById(R.id.dayStrip)
         recyclerView = findViewById(R.id.recyclerView)
         summaryIncome = findViewById(R.id.summaryIncome)
         summaryExpense = findViewById(R.id.summaryExpense)
@@ -124,64 +121,42 @@ class MainActivity : AppCompatActivity() {
             showDeleteDialog(transaction)
         }
         recyclerView.adapter = adapter
+
+        // Navigation drawer
+        val navView = findViewById<NavigationView>(R.id.navView)
+        navView.setNavigationItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.navCalendar -> {
+                    drawerLayout.closeDrawers()
+                    openCalendar()
+                }
+                R.id.navStats -> {
+                    drawerLayout.closeDrawers()
+                    startActivity(Intent(this, StatsActivity::class.java))
+                }
+            }
+            true
+        }
     }
 
     private fun setupListeners() {
+        menuButton.setOnClickListener {
+            drawerLayout.openDrawer(findViewById<NavigationView>(R.id.navView))
+        }
+
         prevDayBtn.setOnClickListener {
-            currentDay--
-            if (currentDay < 1) {
-                currentMonth--
-                if (currentMonth < 1) {
-                    currentYear--
-                    currentMonth = 12
-                }
-                currentDay = PersianCalendar.getPersianMonthDays(currentYear, currentMonth)
-            }
+            val prev = PersianCalendar.addDays(currentYear, currentMonth, currentDay, -1)
+            currentYear = prev.year
+            currentMonth = prev.month
+            currentDay = prev.day
             loadData()
         }
 
         nextDayBtn.setOnClickListener {
-            val maxDays = PersianCalendar.getPersianMonthDays(currentYear, currentMonth)
-            currentDay++
-            if (currentDay > maxDays) {
-                currentDay = 1
-                currentMonth++
-                if (currentMonth > 12) {
-                    currentYear++
-                    currentMonth = 1
-                }
-            }
-            loadData()
-        }
-
-        todayBtn.setOnClickListener {
-            val cal = Calendar.getInstance()
-            val today = PersianCalendar.gregorianToPersian(
-                cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)
-            )
-            currentYear = today.year
-            currentMonth = today.month
-            currentDay = today.day
-            loadData()
-        }
-
-        prevMonthBtn.setOnClickListener {
-            currentMonth--
-            if (currentMonth < 1) {
-                currentYear--
-                currentMonth = 12
-            }
-            currentDay = 1
-            loadData()
-        }
-
-        nextMonthBtn.setOnClickListener {
-            currentMonth++
-            if (currentMonth > 12) {
-                currentYear++
-                currentMonth = 1
-            }
-            currentDay = 1
+            val next = PersianCalendar.addDays(currentYear, currentMonth, currentDay, 1)
+            currentYear = next.year
+            currentMonth = next.month
+            currentDay = next.day
             loadData()
         }
 
@@ -194,9 +169,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun openCalendar() {
+        val intent = Intent(this, CalendarActivity::class.java)
+        calendarLauncher.launch(intent)
+    }
+
+    private val calendarLauncher = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+        .let { registerForActivityResult(it) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val data = result.data
+                if (data != null) {
+                    currentYear = data.getIntExtra("year", currentYear)
+                    currentMonth = data.getIntExtra("month", currentMonth)
+                    currentDay = data.getIntExtra("day", currentDay)
+                    loadData()
+                }
+            }
+        } }
+
     private fun loadData() {
         updateHeader()
-        buildCalendar()
+        buildDayStrip()
         loadTransactions()
         loadSummary()
     }
@@ -207,74 +200,56 @@ class MainActivity : AppCompatActivity() {
             cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)
         )
         val isToday = currentYear == today.year && currentMonth == today.month && currentDay == today.day
-        val dayName = PersianCalendar.getPersianWeekDayName(cal.get(Calendar.DAY_OF_WEEK))
+        val dayName = PersianCalendar.getPersianWeekDayNameForDate(currentYear, currentMonth, currentDay)
         dateHeader.text = if (isToday) {
             "امروز — $currentDay ${PersianCalendar.getPersianMonthName(currentMonth)} $currentYear"
         } else {
             "$dayName $currentDay ${PersianCalendar.getPersianMonthName(currentMonth)} $currentYear"
         }
-        monthYearText.text = "${PersianCalendar.getPersianMonthName(currentMonth)} $currentYear"
     }
 
-    private fun buildCalendar() {
-        calendarGrid.removeAllViews()
-        val daysInMonth = PersianCalendar.getPersianMonthDays(currentYear, currentMonth)
+    /**
+     * Horizontal strip of recent days (7 days ending at the selected day).
+     */
+    private fun buildDayStrip() {
+        dayStrip.removeAllViews()
 
-        // First day of month: convert to Gregorian, find day of week
-        val greg = PersianCalendar.persianToGregorian(currentYear, currentMonth, 1)
-        val cal = Calendar.getInstance()
-        cal.set(greg.first, greg.second - 1, greg.third)
-        var startDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) % 7 // 0=Saturday .. 6=Friday
-
-        // Today's day
         val todayCal = Calendar.getInstance()
         val todayPersian = PersianCalendar.gregorianToPersian(
             todayCal.get(Calendar.YEAR), todayCal.get(Calendar.MONTH) + 1, todayCal.get(Calendar.DAY_OF_MONTH)
         )
 
-        // Weekday headers
-        val weekDays = arrayOf("ش", "ی", "د", "س", "چ", "پ", "ج")
-        for (dayName in weekDays) {
-            val tv = layoutInflater.inflate(R.layout.item_calendar_day, calendarGrid, false) as TextView
-            tv.text = dayName
-            tv.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
-            tv.textSize = 11f
-            calendarGrid.addView(tv)
-        }
+        // 7 days: from (selected-6) to (selected)
+        for (offset in -6..0) {
+            val d = PersianCalendar.addDays(currentYear, currentMonth, currentDay, offset)
+            val cell = layoutInflater.inflate(R.layout.item_day_strip, dayStrip, false)
 
-        // Empty cells before first day
-        for (i in 0 until startDayOfWeek) {
-            val tv = layoutInflater.inflate(R.layout.item_calendar_day, calendarGrid, false) as TextView
-            tv.visibility = View.INVISIBLE
-            calendarGrid.addView(tv)
-        }
+            val weekday = cell.findViewById<TextView>(R.id.dayStripWeekday)
+            val number = cell.findViewById<TextView>(R.id.dayStripNumber)
 
-        // Day cells
-        for (day in 1..daysInMonth) {
-            val tv = layoutInflater.inflate(R.layout.item_calendar_day, calendarGrid, false) as TextView
-            tv.text = day.toString()
-            tv.setTextColor(ContextCompat.getColor(this, R.color.calendar_day))
+            weekday.text = PersianCalendar.getPersianWeekDayNameForDate(d.year, d.month, d.day)
+            number.text = d.day.toString()
 
-            val isToday = day == todayPersian.day && currentMonth == todayPersian.month && currentYear == todayPersian.year
-            val isSelected = day == currentDay
+            val isSelected = d.year == currentYear && d.month == currentMonth && d.day == currentDay
+            val isToday = d.year == todayPersian.year && d.month == todayPersian.month && d.day == todayPersian.day
 
-            if (isToday) {
-                tv.setBackgroundResource(R.drawable.calendar_today_bg)
-            }
             if (isSelected) {
-                tv.setBackgroundResource(R.drawable.calendar_selected_bg)
-                if (isToday) {
-                    tv.setTextColor(ContextCompat.getColor(this, R.color.primary))
-                } else {
-                    tv.setTextColor(ContextCompat.getColor(this, R.color.on_primary))
-                }
+                number.setBackgroundResource(R.drawable.calendar_selected_bg)
+                number.setTextColor(ContextCompat.getColor(this, R.color.on_primary))
+            } else if (isToday) {
+                number.setBackgroundResource(R.drawable.calendar_today_bg)
+                number.setTextColor(ContextCompat.getColor(this, R.color.primary))
+            } else {
+                number.setTextColor(ContextCompat.getColor(this, R.color.on_surface))
             }
 
-            tv.setOnClickListener { v ->
-                currentDay = day
+            cell.setOnClickListener {
+                currentYear = d.year
+                currentMonth = d.month
+                currentDay = d.day
                 loadData()
             }
-            calendarGrid.addView(tv)
+            dayStrip.addView(cell)
         }
     }
 

@@ -20,6 +20,12 @@ interface TransactionDao {
     @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = :type AND year = :year AND month = :month")
     fun getMonthlyTotal(type: TransactionType, year: Int, month: Int): Flow<Long>
 
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = :type AND year = :year")
+    fun getYearlyTotal(type: TransactionType, year: Int): Flow<Long>
+
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = :type AND timestamp >= :startTs AND timestamp < :endTs")
+    fun getTotalBetween(type: TransactionType, startTs: Long, endTs: Long): Flow<Long>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(transaction: Transaction): Long
 

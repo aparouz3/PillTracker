@@ -159,4 +159,56 @@ object PersianCalendar {
     fun isPersianLeapYear(year: Int): Boolean {
         return jalCal(year)[0] == 0
     }
+
+    /**
+     * Add/subtract days to a Persian date and return the resulting Persian date.
+     */
+    fun addDays(year: Int, month: Int, day: Int, days: Int): PersianDate {
+        val g = persianToGregorian(year, month, day)
+        val cal = Calendar.getInstance()
+        cal.clear()
+        cal.set(g.first, g.second - 1, g.third)
+        cal.add(Calendar.DAY_OF_MONTH, days)
+        return gregorianToPersian(
+            cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)
+        )
+    }
+
+    /**
+     * Persian weekday name for a specific Persian date.
+     */
+    fun getPersianWeekDayNameForDate(year: Int, month: Int, day: Int): String {
+        val g = persianToGregorian(year, month, day)
+        val cal = Calendar.getInstance()
+        cal.clear()
+        cal.set(g.first, g.second - 1, g.third)
+        return getPersianWeekDayName(cal.get(Calendar.DAY_OF_WEEK))
+    }
+
+    /**
+     * Gregorian timestamp (millis) at 00:00 of the given Persian date.
+     */
+    fun persianDateToTimestamp(year: Int, month: Int, day: Int): Long {
+        val g = persianToGregorian(year, month, day)
+        val cal = Calendar.getInstance()
+        cal.clear()
+        cal.set(g.first, g.second - 1, g.third)
+        return cal.timeInMillis
+    }
+
+    /**
+     * Start of the current Persian week (Saturday 00:00) in millis.
+     */
+    fun getWeekStartTimestamp(): Long {
+        val now = Calendar.getInstance()
+        val dow = now.get(Calendar.DAY_OF_WEEK) // 1=Sunday .. 7=Saturday
+        val persianIndex = dow % 7 // 0=Saturday .. 6=Friday
+        val cal = now.clone() as Calendar
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        cal.add(Calendar.DAY_OF_MONTH, -persianIndex)
+        return cal.timeInMillis
+    }
 }
