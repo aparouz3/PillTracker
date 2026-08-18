@@ -18,7 +18,7 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("keystore/pilltracker.keystore")
+            storeFile = file("../keystore/pilltracker.keystore")
             storePassword = "pilltracker123"
             keyAlias = "pilltracker"
             keyPassword = "pilltracker123"
