@@ -29,8 +29,7 @@
         android:hint="مبلغ به تومان"
         app:endIconMode="clear_text"
         app:boxStrokeColor="@color/primary"
-        app:hintTextColor="@color/primary"
-        app:prefixText="﷼ ">
+        app:hintTextColor="@color/primary">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/amountInput"
