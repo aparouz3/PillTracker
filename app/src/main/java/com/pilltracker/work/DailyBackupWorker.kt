@@ -54,27 +54,8 @@ class DailyBackupWorker(
         val resolver = applicationContext.contentResolver
         val folder = Environment.DIRECTORY_DOWNLOADS + "/PillTrackerBackups"
 
-        // Delete old backups older than 30 days (keep the latest 30)
-        resolver.query(
-            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-            arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.DATE_ADDED),
-            "${MediaStore.MediaColumns.RELATIVE_PATH} = ?",
-            arrayOf("$folder/"),
-            "${MediaStore.MediaColumns.DATE_ADDED} DESC"
-        )?.use { cursor ->
-            var count = 0
-            while (cursor.moveToNext()) {
-                count++
-                if (count > 30) {
-                    val id = cursor.getLong(0)
-                    resolver.delete(
-                        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                        "${MediaStore.MediaColumns._ID} = ?",
-                        arrayOf(id.toString())
-                    )
-                }
-            }
-        }
+        // NOTE: no backups are ever deleted — all daily backups are kept forever,
+        // so no expense/income data is ever lost.
 
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
@@ -99,10 +80,7 @@ class DailyBackupWorker(
         )
         if (!dir.exists()) dir.mkdirs()
 
-        // Keep the latest 30
-        val files = dir.listFiles { f -> f.name.startsWith("pilltracker_backup_") && f.name.endsWith(".json") }
-            ?.sortedByDescending { it.lastModified() } ?: emptyList()
-        for (f in files.drop(30)) f.delete()
+        // NOTE: no backups are ever deleted — all daily backups are kept forever.
 
         val file = File(dir, filename)
         file.outputStream().use { out ->
