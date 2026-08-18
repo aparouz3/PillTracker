@@ -143,6 +143,10 @@ class MainActivity : AppCompatActivity() {
                     drawerLayout.closeDrawers()
                     startActivity(Intent(this, StatsActivity::class.java))
                 }
+                R.id.navTopExpenses -> {
+                    drawerLayout.closeDrawers()
+                    startActivity(Intent(this, TopExpensesActivity::class.java))
+                }
                 R.id.navBackup -> {
                     drawerLayout.closeDrawers()
                     exportBackup()
@@ -467,10 +471,10 @@ class MainActivity : AppCompatActivity() {
                 ContextCompat.getColor(this, if (!isExpense) R.color.income_green else android.R.color.transparent)
             )
             expenseBtn.setTextColor(
-                ContextCompat.getColor(this, if (isExpense) android.R.color.white else R.color.expense_red)
+                ContextCompat.getColor(this, if (isExpense) R.color.on_primary else R.color.expense_red)
             )
             incomeBtn.setTextColor(
-                ContextCompat.getColor(this, if (!isExpense) android.R.color.white else R.color.income_green)
+                ContextCompat.getColor(this, if (!isExpense) R.color.on_primary else R.color.income_green)
             )
         }
         updateTypeButtons()

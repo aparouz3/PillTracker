@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="expense_red">#FFE57373</color>
+    <color name="income_green">#FF81C784</color>
+    <!-- Dark palette for night mode -->
+    <color name="primary">#FF90A4AE</color>
+    <color name="primary_variant">#FF78909C</color>
+    <color name="secondary">#FF607D8B</color>
+    <color name="background">#FF121417</color>
+    <color name="icon_bg">#FFFFFFFF</color>
+    <color name="surface">#FF1E2226</color>
+    <color name="on_primary">#FF263238</color>
+    <color name="on_surface">#FFECEFF1</color>
+    <color name="text_secondary">#FF90A4AE</color>
+    <color name="today_bg">#FF37474F</color>
+    <color name="calendar_day">#FFECEFF1</color>
+    <color name="calendar_day_disabled">#FF546E7A</color>
+    <color name="divider">#FF37474F</color>
+</resources>

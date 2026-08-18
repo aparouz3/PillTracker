@@ -25,5 +25,8 @@
         <activity
             android:name=".ui.StatsActivity"
             android:exported="false" />
+        <activity
+            android:name=".ui.TopExpensesActivity"
+            android:exported="false" />
     </application>
 </manifest>
