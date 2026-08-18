@@ -16,6 +16,15 @@ android {
         versionName = "1.1"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore/pilltracker.keystore")
+            storePassword = "pilltracker123"
+            keyAlias = "pilltracker"
+            keyPassword = "pilltracker123"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -25,15 +34,6 @@ android {
         debug {
             // Sign debug builds with the stable keystore so updates install over previous versions
             signingConfig = signingConfigs.getByName("release")
-        }
-    }
-
-    signingConfigs {
-        create("release") {
-            storeFile = file("keystore/pilltracker.keystore")
-            storePassword = "pilltracker123"
-            keyAlias = "pilltracker"
-            keyPassword = "pilltracker123"
         }
     }
     compileOptions {
