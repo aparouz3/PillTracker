@@ -30,7 +30,7 @@
                     android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="منو"
-                    android:src="@android:drawable/ic_menu"
+                    android:src="@drawable/ic_menu"
                     android:tint="@color/on_surface" />
 
                 <TextView
