@@ -1,5 +1,7 @@
 package com.pilltracker.util
 
+import java.util.Calendar
+
 /**
  * Persian (Jalali/Solar Hijri) calendar converter.
  * Uses the standard Birashk algorithm (jalaali-js compatible).
