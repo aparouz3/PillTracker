@@ -8,4 +8,12 @@
         android:id="@+id/navStats"
         android:icon="@android:drawable/ic_menu_agenda"
         android:title="جمع هفتگی / ماهانه / سالانه" />
+    <item
+        android:id="@+id/navBackup"
+        android:icon="@drawable/ic_backup"
+        android:title="بکاپ‌گیری (خروجی داده)" />
+    <item
+        android:id="@+id/navRestore"
+        android:icon="@drawable/ic_restore"
+        android:title="بازیابی (ورودی داده)" />
 </menu>

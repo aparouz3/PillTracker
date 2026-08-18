@@ -1,6 +1,7 @@
 package com.pilltracker.ui
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -8,6 +9,8 @@ import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -25,9 +28,12 @@ import com.pilltracker.data.Transaction
 import com.pilltracker.data.TransactionType
 import com.pilltracker.util.FormatUtils
 import com.pilltracker.util.PersianCalendar
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.util.Calendar
 
@@ -40,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private var currentYear: Int = 0
     private var currentMonth: Int = 0
     private var currentDay: Int = 0
+    private var transactionsJob: Job? = null
 
     // UI
     private lateinit var drawerLayout: DrawerLayout
@@ -136,8 +143,121 @@ class MainActivity : AppCompatActivity() {
                     drawerLayout.closeDrawers()
                     startActivity(Intent(this, StatsActivity::class.java))
                 }
+                R.id.navBackup -> {
+                    drawerLayout.closeDrawers()
+                    exportBackup()
+                }
+                R.id.navRestore -> {
+                    drawerLayout.closeDrawers()
+                    importBackup()
+                }
             }
             true
+        }
+    }
+
+    // ---- Backup / Restore ----
+
+    private val backupLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            writeBackup(uri)
+        }
+    }
+
+    private val restoreLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            restoreBackup(uri)
+        }
+    }
+
+    private fun exportBackup() {
+        val now = Calendar.getInstance()
+        val today = PersianCalendar.gregorianToPersian(
+            now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1, now.get(Calendar.DAY_OF_MONTH)
+        )
+        val filename = "pilltracker_backup_${today.year}_${today.month}_${today.day}.json"
+        backupLauncher.launch(filename)
+    }
+
+    private fun writeBackup(uri: Uri) {
+        lifecycleScope.launch {
+            try {
+                val all = db.transactionDao().getAllTransactionsOnce()
+                val json = JSONObject().apply {
+                    put("version", 1)
+                    put("exportedAt", System.currentTimeMillis())
+                    put("transactions", JSONArray().apply {
+                        for (t in all) {
+                            put(JSONObject().apply {
+                                put("id", t.id)
+                                put("title", t.title)
+                                put("amount", t.amount)
+                                put("type", t.type.name)
+                                put("year", t.year)
+                                put("month", t.month)
+                                put("day", t.day)
+                                put("timestamp", t.timestamp)
+                            })
+                        }
+                    })
+                }
+                contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(json.toString(2).toByteArray(Charsets.UTF_8))
+                }
+                Toast.makeText(this@MainActivity, "بکاپ ذخیره شد (${all.size} تراکنش)", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "خطا در بکاپ: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun importBackup() {
+        restoreLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
+    }
+
+    private fun restoreBackup(uri: Uri) {
+        lifecycleScope.launch {
+            try {
+                val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                    ?: throw Exception("فایل خالی است")
+                val json = JSONObject(text)
+                val arr = json.getJSONArray("transactions")
+                val list = mutableListOf<Transaction>()
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    list.add(
+                        Transaction(
+                            id = o.optLong("id", 0),
+                            title = o.optString("title", ""),
+                            amount = o.optLong("amount", 0),
+                            type = if (o.optString("type") == "INCOME") TransactionType.INCOME else TransactionType.EXPENSE,
+                            year = o.optInt("year", 0),
+                            month = o.optInt("month", 0),
+                            day = o.optInt("day", 0),
+                            timestamp = o.optLong("timestamp", System.currentTimeMillis())
+                        )
+                    )
+                }
+                if (list.isEmpty()) {
+                    Toast.makeText(this@MainActivity, "فایل بکاپ معتبر نیست", Toast.LENGTH_LONG).show()
+                    return@launch
+                }
+                MaterialAlertDialogBuilder(this@MainActivity)
+                    .setTitle("بازیابی داده")
+                    .setMessage("${list.size} تراکنش در فایل پیدا شد. داده فعلی با این داده جایگزین می‌شود. ادامه می‌دهید؟")
+                    .setPositiveButton("بله") { _, _ ->
+                        lifecycleScope.launch {
+                            db.transactionDao().deleteAll()
+                            db.transactionDao().insertAll(list)
+                            loadData()
+                            Toast.makeText(this@MainActivity, "بازیابی انجام شد (${list.size} تراکنش)", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    .setNegativeButton("خیر", null)
+                    .show()
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "خطا در بازیابی: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -256,13 +376,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadTransactions() {
-        lifecycleScope.launch {
+        transactionsJob?.cancel()
+        transactionsJob = lifecycleScope.launch {
             db.transactionDao().getTransactionsForDate(currentYear, currentMonth, currentDay)
                 .collectLatest { list ->
                     transactions.clear()
                     transactions.addAll(list)
                     adapter.notifyDataSetChanged()
-                    // Force a layout pass so the list redraws immediately (fixes blank list after delete)
+                    // Force a layout pass so the list redraws immediately (fixes blank list after add/delete)
                     recyclerView.requestLayout()
                     emptyText.visibility = if (transactions.isEmpty()) View.VISIBLE else View.GONE
                 }
@@ -316,6 +437,8 @@ class MainActivity : AppCompatActivity() {
                         day = currentDay
                     )
                 )
+                loadTransactions()
+                loadSummary()
             }
             dialog.dismiss()
         }
@@ -389,6 +512,8 @@ class MainActivity : AppCompatActivity() {
                         type = selectedType
                     )
                 )
+                loadTransactions()
+                loadSummary()
             }
             dialog.dismiss()
         }
@@ -401,6 +526,8 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("بله") { _, _ ->
                 lifecycleScope.launch {
                     db.transactionDao().delete(transaction)
+                    loadTransactions()
+                    loadSummary()
                 }
             }
             .setNegativeButton("خیر", null)
