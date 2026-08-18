@@ -262,6 +262,8 @@ class MainActivity : AppCompatActivity() {
                     transactions.clear()
                     transactions.addAll(list)
                     adapter.notifyDataSetChanged()
+                    // Force a layout pass so the list redraws immediately (fixes blank list after delete)
+                    recyclerView.requestLayout()
                     emptyText.visibility = if (transactions.isEmpty()) View.VISIBLE else View.GONE
                 }
         }

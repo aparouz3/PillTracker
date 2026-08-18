@@ -12,14 +12,28 @@ android {
         applicationId = "com.pilltracker"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+        debug {
+            // Sign debug builds with the stable keystore so updates install over previous versions
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore/pilltracker.keystore")
+            storePassword = "pilltracker123"
+            keyAlias = "pilltracker"
+            keyPassword = "pilltracker123"
         }
     }
     compileOptions {
