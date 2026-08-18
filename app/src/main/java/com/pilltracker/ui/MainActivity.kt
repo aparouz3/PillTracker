@@ -27,6 +27,7 @@ import com.pilltracker.util.PersianCalendar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.Calendar
 
 class MainActivity : AppCompatActivity() {
@@ -74,6 +75,31 @@ class MainActivity : AppCompatActivity() {
         initViews()
         setupListeners()
         loadData()
+        checkAndShowCrashReport()
+    }
+
+    /**
+     * If a crash log exists from a previous run, show it so the user can report it.
+     */
+    private fun checkAndShowCrashReport() {
+        try {
+            val dir = File(getExternalFilesDir(null) ?: filesDir, "crashes")
+            val file = File(dir, "last_crash.txt")
+            if (file.exists()) {
+                val content = file.readText()
+                if (content.isNotBlank()) {
+                    file.delete()
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("گزارش خطا (کرش قبلی)")
+                        .setMessage(content)
+                        .setPositiveButton("متوجه شدم", null)
+                        .setCancelable(false)
+                        .show()
+                }
+            }
+        } catch (e: Exception) {
+            // ignore
+        }
     }
 
     private fun initViews() {
@@ -198,7 +224,7 @@ class MainActivity : AppCompatActivity() {
         val greg = PersianCalendar.persianToGregorian(currentYear, currentMonth, 1)
         val cal = Calendar.getInstance()
         cal.set(greg.first, greg.second - 1, greg.third)
-        var startDayOfWeek = (cal.get(Calendar.DAY_OF_WEEK) + 4) % 7 // 0=Saturday .. 6=Friday
+        var startDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) % 7 // 0=Saturday .. 6=Friday
 
         // Today's day
         val todayCal = Calendar.getInstance()

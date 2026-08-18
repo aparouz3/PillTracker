@@ -4,40 +4,40 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- NotebookLM style: flat, minimal, rounded shapes -->
+    <!-- NotebookLM style: flat, minimal, rounded shapes, white on indigo -->
 
     <!-- Body (rounded blob) -->
     <path
-        android:fillColor="#FF1A237E"
+        android:fillColor="#FFFFFFFF"
         android:pathData="M54,42 C69,42 78,50 78,62 C78,71 71,77 63,77 L45,77 C37,77 30,71 30,62 C30,50 39,42 54,42 Z" />
 
     <!-- Head (circle, overlaps body) -->
     <path
-        android:fillColor="#FF1A237E"
+        android:fillColor="#FFFFFFFF"
         android:pathData="M42,40 C42,30 50,24 59,24 C68,24 74,30 74,39 C74,47 66,51 58,50 C50,49 42,48 42,40 Z" />
 
-    <!-- Ear (lighter shade, rounded) -->
+    <!-- Ear (lighter tint) -->
     <path
-        android:fillColor="#FF3949AB"
+        android:fillColor="#FFB3C6FF"
         android:pathData="M60,27 C66,23 74,25 77,31 C80,37 76,42 70,42 C64,42 58,35 60,27 Z" />
 
-    <!-- Trunk (curved, rounded stroke) -->
+    <!-- Trunk (curved) -->
     <path
-        android:fillColor="#FF1A237E"
+        android:fillColor="#FFFFFFFF"
         android:pathData="M30,42 C24,46 22,54 26,60 C29,65 35,65 36,60 C37,56 34,53 32,50 C30,47 32,44 34,43"
-        android:strokeColor="#FF1A237E"
+        android:strokeColor="#FFFFFFFF"
         android:strokeWidth="4"
         android:strokeLineCap="round" />
 
-    <!-- Eye (small dot) -->
+    <!-- Eye (dark dot) -->
     <path
-        android:fillColor="#FFFFFFFF"
+        android:fillColor="#FF1A237E"
         android:pathData="M50,32 m-3,0 a3,3 0 1 1 6,0 a3,3 0 1 1 -6,0" />
 
     <!-- Tail -->
     <path
         android:fillColor="#00000000"
-        android:strokeColor="#FF1A237E"
+        android:strokeColor="#FFFFFFFF"
         android:strokeWidth="3"
         android:strokeLineCap="round"
         android:pathData="M78,62 C83,58 86,60 86,64" />

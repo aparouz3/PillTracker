@@ -2,7 +2,8 @@ package com.pilltracker.util
 
 /**
  * Persian (Jalali/Solar Hijri) calendar converter.
- * Converts between Gregorian and Persian dates.
+ * Uses the standard Birashk algorithm (jalaali-js compatible).
+ * Valid for Persian years -61 to 3177 (roughly 561 to 3798 Gregorian).
  */
 object PersianCalendar {
 
@@ -15,11 +16,15 @@ object PersianCalendar {
         "شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه"
     )
 
+    private val breaks = intArrayOf(
+        -61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178
+    )
+
     fun getPersianMonthName(month: Int): String = persianMonthNames.getOrElse(month - 1) { "?" }
 
     fun getPersianWeekDayName(dayOfWeek: Int): String {
-        // Java: 1=Monday ... 7=Sunday → Persian: 0=Saturday ... 6=Friday
-        val index = (dayOfWeek + 4) % 7
+        // Java: 1=Sunday ... 7=Saturday → Persian: 0=Saturday ... 6=Friday
+        val index = dayOfWeek % 7
         return persianWeekDays[index]
     }
 
@@ -29,114 +34,113 @@ object PersianCalendar {
         val day: Int
     ) {
         val monthName: String get() = getPersianMonthName(month)
-        val dayName: String get() = ""
-
         fun toDisplayString(): String = "$day $monthName $year"
+    }
+
+    // ---- helpers (integer division/modulo matching JS semantics) ----
+    private fun div(a: Int, b: Int): Int = a / b
+
+    private fun mod(a: Int, b: Int): Int = a - div(a, b) * b
+
+    private fun jalCal(jy: Int): IntArray {
+        // returns [leap, gy, march]
+        val gy = jy + 621
+        var leapJ = -14
+        var jp = breaks[0]
+        var jump = 0
+
+        require(jy >= breaks[0] && jy < breaks[breaks.size - 1]) { "Invalid Jalaali year $jy" }
+
+        for (i in 1 until breaks.size) {
+            val jm = breaks[i]
+            jump = jm - jp
+            if (jy < jm) break
+            leapJ = leapJ + div(jump, 33) * 8 + div(mod(jump, 33), 4)
+            jp = jm
+        }
+        var n = jy - jp
+
+        // Find the number of leap years from AD 621 to the beginning of the current year
+        leapJ = leapJ + div(n, 33) * 8 + div(mod(n, 33) + 3, 4)
+        if (mod(jump, 33) == 4 && jump - n == 4) {
+            leapJ += 1
+        }
+
+        // And the same in the Gregorian calendar (until the year gy)
+        val leapG = div(gy, 4) - div((div(gy, 100) + 1) * 3, 4) - 150
+
+        // Determine the Gregorian date of Farvardin the 1st
+        val march = 20 + leapJ - leapG
+
+        // Find how many years have passed since the last leap year
+        if (jump - n < 6) {
+            n = n - jump + div(jump + 4, 33) * 33
+        }
+        var leap = mod(mod(n + 1, 33) - 1, 4)
+        if (leap == -1) {
+            leap = 4
+        }
+        return intArrayOf(leap, gy, march)
+    }
+
+    private fun g2d(gy: Int, gm: Int, gd: Int): Int {
+        var d = div((gy + div(gm - 8, 6) + 100100) * 1461, 4) + div(153 * mod(gm + 9, 12) + 2, 5) + gd - 34840408
+        d = d - div(div(gy + 100100 + div(gm - 8, 6), 100) * 3, 4) + 752
+        return d
+    }
+
+    private fun d2g(jdn: Int): IntArray {
+        val j = 4 * jdn + 139361631 + div(div(4 * jdn + 183187720, 146097) * 3, 4) * 4 - 3908
+        val i = div(mod(j, 1461), 4) * 5 + 308
+        val gd = div(mod(i, 153), 5) + 1
+        val gm = mod(div(i, 153), 12) + 1
+        val gy = div(j, 1461) - 100100 + div(8 - gm, 6)
+        return intArrayOf(gy, gm, gd)
+    }
+
+    private fun j2d(jy: Int, jm: Int, jd: Int): Int {
+        val r = jalCal(jy)
+        return g2d(r[1], 3, r[2]) + (jm - 1) * 31 - div(jm, 7) * (jm - 7) + jd - 1
+    }
+
+    private fun d2j(jdn: Int): IntArray {
+        val gy = d2g(jdn)[0]
+        var jy = gy - 621
+        val r = jalCal(jy)
+        val jdn1f = g2d(gy, 3, r[2])
+        var k = jdn - jdn1f
+        if (k >= 0) {
+            if (k <= 185) {
+                val jm = div(k, 31) + 1
+                val jd = mod(k, 31) + 1
+                return intArrayOf(jy, jm, jd)
+            } else {
+                k -= 186
+            }
+        } else {
+            jy -= 1
+            k += 179
+            k = if (r[0] == 1) k + 1 else k
+        }
+        val jm = 7 + div(k, 30)
+        val jd = mod(k, 30) + 1
+        return intArrayOf(jy, jm, jd)
     }
 
     /**
      * Convert Gregorian to Persian date.
-     * Algorithm based on the Persian calendar.
      */
     fun gregorianToPersian(gYear: Int, gMonth: Int, gDay: Int): PersianDate {
-        val array = intArrayOf(0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
-        val leap: Boolean
-        var gd: Int
-        var gm: Int
-        var gy: Int
-        var jm: Int
-        var jy: Int
-        var jd: Int
-
-        gy = gYear - 1600
-        gm = gMonth - 1
-        gd = gDay - 1
-
-        var gDayNo = 365 * gy + (gy + 3) / 4 - (gy + 99) / 100 + (gy + 399) / 400
-        for (i in 0 until gm) {
-            gDayNo += array[i]
-        }
-        if (gm > 1 && (gy % 4 == 0 && gy % 100 != 0 || gy % 400 == 0)) {
-            gDayNo++
-        }
-        gDayNo += gd
-
-        var jDayNo = gDayNo - 79
-        val jNp = (jDayNo / 12053).toInt()
-        jDayNo %= 12053
-        jy = 979 + 33 * jNp + 4 * (jDayNo / 1461)
-        jDayNo %= 1461
-        if (jDayNo >= 366) {
-            jy += (jDayNo - 1) / 365
-            jDayNo = (jDayNo - 1) % 365
-        }
-        jm = 0
-        while (jm < 11 && jDayNo >= if (jm < 6) 31 else 30) {
-            jDayNo -= if (jm < 6) 31 else 30
-            jm++
-        }
-        jm++
-        jd = jDayNo + 1
-
-        return PersianDate(jy, jm, jd)
+        val j = d2j(g2d(gYear, gMonth, gDay))
+        return PersianDate(j[0], j[1], j[2])
     }
 
     /**
      * Convert Persian to Gregorian date.
      */
     fun persianToGregorian(pYear: Int, pMonth: Int, pDay: Int): Triple<Int, Int, Int> {
-        var gy: Int
-        var gm: Int
-        var gd: Int
-        var jy: Int
-
-        jy = pYear - 979
-        var jMonth = pMonth - 1
-        var jDay = pDay - 1
-
-        var jDayNo = 365 * jy + (jy / 33) * 8 + (jy % 33 + 3) / 4
-        for (i in 0 until jMonth) {
-            jDayNo += if (i < 6) 31 else 30
-        }
-        jDayNo += jDay
-
-        var gDayNo = jDayNo + 79
-        gy = 1600 + 400 * (gDayNo / 146097)
-        gDayNo = gDayNo % 146097
-        var leap = true
-        if (gDayNo >= 36525) {
-            gDayNo--
-            gy += 100 * (gDayNo / 36524)
-            gDayNo %= 36524
-            if (gDayNo >= 365) {
-                gDayNo++
-            } else {
-                leap = false
-            }
-        }
-        gy += 4 * (gDayNo / 1461)
-        gDayNo %= 1461
-        if (gDayNo >= 366) {
-            leap = false
-            gDayNo--
-            gy += gDayNo / 365
-            gDayNo %= 365
-        }
-        gm = 0
-        val monthDays = if (leap) {
-            intArrayOf(31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-        } else {
-            intArrayOf(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-        }
-        for (i in monthDays.indices) {
-            if (gDayNo < monthDays[i]) {
-                gm = i + 1
-                break
-            }
-            gDayNo -= monthDays[i]
-        }
-        gd = gDayNo + 1
-        return Triple(gy, gm, gd)
+        val g = d2g(j2d(pYear, pMonth, pDay))
+        return Triple(g[0], g[1], g[2])
     }
 
     /**
@@ -145,7 +149,7 @@ object PersianCalendar {
     fun getPersianMonthDays(year: Int, month: Int): Int {
         if (month <= 6) return 31
         if (month <= 11) return 30
-        // Month 12 (Esfand) - can be 29 or 30
+        // Month 12 (Esfand) - 29 or 30 depending on leap year
         return if (isPersianLeapYear(year)) 30 else 29
     }
 
@@ -153,8 +157,6 @@ object PersianCalendar {
      * Check if a Persian year is a leap year.
      */
     fun isPersianLeapYear(year: Int): Boolean {
-        val base = year - 979
-        val remainder = (base % 33) + 3
-        return remainder >= 33 || remainder >= 4
+        return jalCal(year)[0] == 0
     }
 }
