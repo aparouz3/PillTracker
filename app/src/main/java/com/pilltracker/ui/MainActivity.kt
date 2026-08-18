@@ -25,6 +25,7 @@ import com.pilltracker.data.TransactionType
 import com.pilltracker.util.FormatUtils
 import com.pilltracker.util.PersianCalendar
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -265,25 +266,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadSummary() {
         lifecycleScope.launch {
-            db.transactionDao().getDailyTotal(TransactionType.INCOME, currentYear, currentMonth, currentDay)
-                .collectLatest { income ->
-                    summaryIncome.text = "درآمد: ${FormatUtils.formatAmount(income)}"
-                }
-        }
-        lifecycleScope.launch {
-            db.transactionDao().getDailyTotal(TransactionType.EXPENSE, currentYear, currentMonth, currentDay)
-                .collectLatest { expense ->
-                    summaryExpense.text = "هزینه: ${FormatUtils.formatAmount(expense)}"
-                }
-        }
-        lifecycleScope.launch {
-            val income = db.transactionDao().getDailyTotal(TransactionType.INCOME, currentYear, currentMonth, currentDay)
-            val expense = db.transactionDao().getDailyTotal(TransactionType.EXPENSE, currentYear, currentMonth, currentDay)
-            // Combine both
-            kotlinx.coroutines.coroutineScope {
-                val i = income
-                val e = expense
-            }
+            val income = db.transactionDao().getDailyTotal(TransactionType.INCOME, currentYear, currentMonth, currentDay).first()
+            val expense = db.transactionDao().getDailyTotal(TransactionType.EXPENSE, currentYear, currentMonth, currentDay).first()
+            summaryIncome.text = "درآمد: ${FormatUtils.formatAmount(income)}"
+            summaryExpense.text = "هزینه: ${FormatUtils.formatAmount(expense)}"
+            summaryBalance.text = "مانده: ${FormatUtils.formatAmount(income - expense)}"
         }
     }
 
