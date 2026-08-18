@@ -104,4 +104,15 @@ interface TransactionDao {
 
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    // ---- Category (folder) queries ----
+
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE category_id = :categoryId AND type = 'EXPENSE'")
+    fun getExpenseTotalByCategory(categoryId: Long): Flow<Long>
+
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE category_id = :categoryId AND type = 'INCOME'")
+    fun getIncomeTotalByCategory(categoryId: Long): Flow<Long>
+
+    @Query("SELECT COUNT(*) FROM transactions WHERE category_id = :categoryId")
+    suspend fun countByCategory(categoryId: Long): Int
 }

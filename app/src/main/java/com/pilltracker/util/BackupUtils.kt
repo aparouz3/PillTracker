@@ -1,5 +1,6 @@
 package com.pilltracker.util
 
+import com.pilltracker.data.Category
 import com.pilltracker.data.DailyNote
 import com.pilltracker.data.Transaction
 import com.pilltracker.data.TransactionType
@@ -9,16 +10,17 @@ import java.io.OutputStream
 
 /**
  * Shared backup logic: builds/parses the JSON backup format.
- * Format v2: { version, exportedAt, transactions: [...], notes: [...] }
+ * Format v3: { version, exportedAt, transactions: [...], notes: [...], categories: [...] }
  */
 object BackupUtils {
 
     fun buildBackupJson(
         transactions: List<Transaction>,
-        notes: List<DailyNote>
+        notes: List<DailyNote>,
+        categories: List<Category>
     ): String {
         return JSONObject().apply {
-            put("version", 2)
+            put("version", 3)
             put("exportedAt", System.currentTimeMillis())
             put("transactions", JSONArray().apply {
                 for (t in transactions) {
@@ -31,6 +33,7 @@ object BackupUtils {
                             put("year", t.year)
                             put("month", t.month)
                             put("day", t.day)
+                            if (t.categoryId != null) put("categoryId", t.categoryId)
                             put("timestamp", t.timestamp)
                         }
                     )
@@ -50,16 +53,32 @@ object BackupUtils {
                     )
                 }
             })
+            put("categories", JSONArray().apply {
+                for (c in categories) {
+                    put(
+                        JSONObject().apply {
+                            put("id", c.id)
+                            put("name", c.name)
+                        }
+                    )
+                }
+            })
         }.toString(2)
     }
 
-    fun writeToStream(transactions: List<Transaction>, notes: List<DailyNote>, out: OutputStream) {
-        out.write(buildBackupJson(transactions, notes).toByteArray(Charsets.UTF_8))
+    fun writeToStream(
+        transactions: List<Transaction>,
+        notes: List<DailyNote>,
+        categories: List<Category>,
+        out: OutputStream
+    ) {
+        out.write(buildBackupJson(transactions, notes, categories).toByteArray(Charsets.UTF_8))
     }
 
     data class BackupData(
         val transactions: List<Transaction>,
-        val notes: List<DailyNote>
+        val notes: List<DailyNote>,
+        val categories: List<Category>
     )
 
     fun parseBackup(text: String): BackupData {
@@ -77,6 +96,7 @@ object BackupUtils {
                     year = o.optInt("year", 0),
                     month = o.optInt("month", 0),
                     day = o.optInt("day", 0),
+                    categoryId = if (o.has("categoryId")) o.optLong("categoryId") else null,
                     timestamp = o.optLong("timestamp", System.currentTimeMillis())
                 )
             )
@@ -98,6 +118,19 @@ object BackupUtils {
                 )
             }
         }
-        return BackupData(transactions, notes)
+        val categories = mutableListOf<Category>()
+        if (json.has("categories")) {
+            val cArr = json.getJSONArray("categories")
+            for (i in 0 until cArr.length()) {
+                val o = cArr.getJSONObject(i)
+                categories.add(
+                    Category(
+                        id = o.optLong("id", 0),
+                        name = o.optString("name", "")
+                    )
+                )
+            }
+        }
+        return BackupData(transactions, notes, categories)
     }
 }

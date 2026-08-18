@@ -13,6 +13,10 @@
         android:icon="@android:drawable/ic_menu_sort_by_size"
         android:title="بیشترین تراکنش‌ها" />
     <item
+        android:id="@+id/navCategories"
+        android:icon="@android:drawable/ic_menu_manage"
+        android:title="پوشه‌ها" />
+    <item
         android:id="@+id/navBackup"
         android:icon="@drawable/ic_backup"
         android:title="بکاپ‌گیری (خروجی داده)" />

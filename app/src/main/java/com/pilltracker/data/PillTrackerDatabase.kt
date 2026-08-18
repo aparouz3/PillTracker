@@ -7,10 +7,11 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [Transaction::class, DailyNote::class], version = 2, exportSchema = false)
+@Database(entities = [Transaction::class, DailyNote::class, Category::class], version = 3, exportSchema = false)
 abstract class PillTrackerDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun noteDao(): NoteDao
+    abstract fun categoryDao(): CategoryDao
 
     companion object {
         @Volatile
@@ -30,6 +31,17 @@ abstract class PillTrackerDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS categories (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "name TEXT NOT NULL)"
+                )
+                db.execSQL("ALTER TABLE transactions ADD COLUMN category_id INTEGER")
+            }
+        }
+
         fun getDatabase(context: Context): PillTrackerDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -37,7 +49,7 @@ abstract class PillTrackerDatabase : RoomDatabase() {
                     PillTrackerDatabase::class.java,
                     "pilltracker_database"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                 INSTANCE = instance
                 instance

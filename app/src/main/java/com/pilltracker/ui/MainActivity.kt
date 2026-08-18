@@ -6,6 +6,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -48,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private var currentMonth: Int = 0
     private var currentDay: Int = 0
     private var transactionsJob: Job? = null
+    private var categoryNameMap: Map<Long, String> = emptyMap()
 
     // UI
     private lateinit var drawerLayout: DrawerLayout
@@ -128,8 +131,14 @@ class MainActivity : AppCompatActivity() {
         adapter = TransactionAdapter(
             transactions,
             onDelete = { transaction -> showDeleteDialog(transaction) },
-            onEdit = { transaction -> showEditDialog(transaction) }
+            onEdit = { transaction -> showEditDialog(transaction) },
+            categoryNames = { categoryNameMap }
         )
+        // Load category names for display in the list
+        lifecycleScope.launch {
+            categoryNameMap = db.categoryDao().getAllCategoriesOnce().associate { it.id to it.name }
+            adapter.notifyDataSetChanged()
+        }
         recyclerView.adapter = adapter
 
         // Navigation drawer
@@ -147,6 +156,10 @@ class MainActivity : AppCompatActivity() {
                 R.id.navTopExpenses -> {
                     drawerLayout.closeDrawers()
                     startActivity(Intent(this, TopExpensesActivity::class.java))
+                }
+                R.id.navCategories -> {
+                    drawerLayout.closeDrawers()
+                    startActivity(Intent(this, CategoriesActivity::class.java))
                 }
                 R.id.navBackup -> {
                     drawerLayout.closeDrawers()
@@ -189,10 +202,11 @@ class MainActivity : AppCompatActivity() {
             try {
                 val all = db.transactionDao().getAllTransactionsOnce()
                 val notes = db.noteDao().getAllNotesOnce()
+                val categories = db.categoryDao().getAllCategoriesOnce()
                 contentResolver.openOutputStream(uri)?.use { out ->
-                    BackupUtils.writeToStream(all, notes, out)
+                    BackupUtils.writeToStream(all, notes, categories, out)
                 }
-                Toast.makeText(this@MainActivity, "بکاپ ذخیره شد (${all.size} تراکنش، ${notes.size} یادداشت)", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, "بکاپ ذخیره شد (${all.size} تراکنش، ${notes.size} یادداشت، ${categories.size} پوشه)", Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, "خطا در بکاپ: ${e.message}", Toast.LENGTH_LONG).show()
             }
@@ -209,20 +223,22 @@ class MainActivity : AppCompatActivity() {
                 val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
                     ?: throw Exception("فایل خالی است")
                 val data = BackupUtils.parseBackup(text)
-                if (data.transactions.isEmpty() && data.notes.isEmpty()) {
+                if (data.transactions.isEmpty() && data.notes.isEmpty() && data.categories.isEmpty()) {
                     Toast.makeText(this@MainActivity, "فایل بکاپ معتبر نیست", Toast.LENGTH_LONG).show()
                     return@launch
                 }
                 MaterialAlertDialogBuilder(this@MainActivity)
                     .setTitle("بازیابی داده")
-                    .setMessage("${data.transactions.size} تراکنش و ${data.notes.size} یادداشت در فایل پیدا شد. داده فعلی با این داده جایگزین می‌شود. ادامه می‌دهید؟")
+                    .setMessage("${data.transactions.size} تراکنش، ${data.notes.size} یادداشت و ${data.categories.size} پوشه در فایل پیدا شد. داده فعلی با این داده جایگزین می‌شود. ادامه می‌دهید؟")
                     .setPositiveButton("بله") { _, _ ->
                         lifecycleScope.launch {
                             db.transactionDao().deleteAll()
                             db.transactionDao().insertAll(data.transactions)
                             db.noteDao().deleteAll()
                             db.noteDao().insertAll(data.notes)
-                            Toast.makeText(this@MainActivity, "بازیابی انجام شد (${data.transactions.size} تراکنش، ${data.notes.size} یادداشت)", Toast.LENGTH_LONG).show()
+                            db.categoryDao().getAllCategoriesOnce().forEach { db.categoryDao().delete(it.id) }
+                            db.categoryDao().insertAll(data.categories)
+                            Toast.makeText(this@MainActivity, "بازیابی انجام شد (${data.transactions.size} تراکنش، ${data.notes.size} یادداشت، ${data.categories.size} پوشه)", Toast.LENGTH_LONG).show()
                             loadData()
                             loadNote()
                         }
@@ -387,6 +403,32 @@ class MainActivity : AppCompatActivity() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_transaction, null)
         val titleInput = dialogView.findViewById<TextInputEditText>(R.id.titleInput)
         val amountInput = dialogView.findViewById<TextInputEditText>(R.id.amountInput)
+        val categoryDropdown = dialogView.findViewById<AutoCompleteTextView>(R.id.categoryDropdown)
+
+        // Load categories into the dropdown
+        val categoryNames = mutableListOf<String>()
+        val categoryIds = mutableListOf<Long>()
+        var selectedCategoryId: Long? = null
+        lifecycleScope.launch {
+            val cats = db.categoryDao().getAllCategoriesOnce()
+            categoryNames.clear()
+            categoryIds.clear()
+            for (c in cats) {
+                categoryNames.add(c.name)
+                categoryIds.add(c.id)
+            }
+            categoryDropdown.setAdapter(
+                ArrayAdapter(
+                    this@MainActivity,
+                    android.R.layout.simple_dropdown_item_1line,
+                    categoryNames
+                )
+            )
+            categoryDropdown.setText("", false)
+        }
+        categoryDropdown.setOnItemClickListener { _, _, position, _ ->
+            selectedCategoryId = categoryIds[position]
+        }
 
         val dialog = MaterialAlertDialogBuilder(this)
             .setTitle(if (type == TransactionType.EXPENSE) "افزودن هزینه" else "افزودن درآمد")
@@ -417,7 +459,8 @@ class MainActivity : AppCompatActivity() {
                         type = type,
                         year = currentYear,
                         month = currentMonth,
-                        day = currentDay
+                        day = currentDay,
+                        categoryId = selectedCategoryId
                     )
                 )
                 loadTransactions()
@@ -431,11 +474,39 @@ class MainActivity : AppCompatActivity() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_transaction, null)
         val titleInput = dialogView.findViewById<TextInputEditText>(R.id.titleInput)
         val amountInput = dialogView.findViewById<TextInputEditText>(R.id.amountInput)
+        val categoryDropdown = dialogView.findViewById<AutoCompleteTextView>(R.id.categoryDropdown)
         val expenseBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.typeExpenseBtn)
         val incomeBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.typeIncomeBtn)
 
         titleInput.setText(transaction.title)
         amountInput.setText(transaction.amount.toString())
+
+        // Load categories, preselect the transaction's current folder
+        val categoryNames = mutableListOf<String>()
+        val categoryIds = mutableListOf<Long>()
+        var selectedCategoryId: Long? = transaction.categoryId
+        lifecycleScope.launch {
+            val cats = db.categoryDao().getAllCategoriesOnce()
+            categoryNames.clear()
+            categoryIds.clear()
+            var selectedName = ""
+            for (c in cats) {
+                categoryNames.add(c.name)
+                categoryIds.add(c.id)
+                if (c.id == transaction.categoryId) selectedName = c.name
+            }
+            categoryDropdown.setAdapter(
+                ArrayAdapter(
+                    this@MainActivity,
+                    android.R.layout.simple_dropdown_item_1line,
+                    categoryNames
+                )
+            )
+            categoryDropdown.setText(selectedName, false)
+        }
+        categoryDropdown.setOnItemClickListener { _, _, position, _ ->
+            selectedCategoryId = categoryIds[position]
+        }
 
         // Type selector: highlight the current type, tap to switch
         var selectedType = transaction.type
@@ -492,7 +563,8 @@ class MainActivity : AppCompatActivity() {
                     transaction.copy(
                         title = title,
                         amount = amount,
-                        type = selectedType
+                        type = selectedType,
+                        categoryId = selectedCategoryId
                     )
                 )
                 loadTransactions()
@@ -582,13 +654,15 @@ class MainActivity : AppCompatActivity() {
     class TransactionAdapter(
         private val items: List<Transaction>,
         private val onDelete: (Transaction) -> Unit,
-        private val onEdit: (Transaction) -> Unit
+        private val onEdit: (Transaction) -> Unit,
+        private val categoryNames: () -> Map<Long, String>
     ) : RecyclerView.Adapter<TransactionAdapter.ViewHolder>() {
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val titleText: TextView = view.findViewById(R.id.transactionTitle)
             val amountText: TextView = view.findViewById(R.id.transactionAmount)
             val typeIcon: View = view.findViewById(R.id.typeIcon)
+            val categoryText: TextView = view.findViewById(R.id.transactionCategory)
             val editBtn: View = view.findViewById(R.id.editBtn)
             val deleteBtn: View = view.findViewById(R.id.deleteBtn)
         }
@@ -612,6 +686,17 @@ class MainActivity : AppCompatActivity() {
             holder.typeIcon.setBackgroundResource(
                 if (item.type == TransactionType.INCOME) R.drawable.ic_income_dot else R.drawable.ic_expense_dot
             )
+            if (item.categoryId != null) {
+                val name = categoryNames()[item.categoryId]
+                if (!name.isNullOrEmpty()) {
+                    holder.categoryText.text = "📁 $name"
+                    holder.categoryText.visibility = View.VISIBLE
+                } else {
+                    holder.categoryText.visibility = View.GONE
+                }
+            } else {
+                holder.categoryText.visibility = View.GONE
+            }
             holder.editBtn.setOnClickListener { onEdit(item) }
             holder.deleteBtn.setOnClickListener { onDelete(item) }
         }

@@ -13,6 +13,7 @@ data class Transaction(
     @ColumnInfo(name = "year") val year: Int,     // Persian year
     @ColumnInfo(name = "month") val month: Int,   // Persian month (1-12)
     @ColumnInfo(name = "day") val day: Int,       // Persian day
+    @ColumnInfo(name = "category_id") val categoryId: Long? = null,
     @ColumnInfo(name = "timestamp") val timestamp: Long = System.currentTimeMillis()
 )
 
