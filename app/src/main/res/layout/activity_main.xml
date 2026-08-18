@@ -30,8 +30,8 @@
                     android:layout_height="48dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="منو"
-                    android:src="@drawable/ic_menu"
-                    android:tint="@color/on_surface" />
+                    android:src="@drawable/ic_menu_new"
+                    android:scaleType="fitCenter" />
 
                 <TextView
                     android:id="@+id/dateHeader"
