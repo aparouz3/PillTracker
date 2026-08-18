@@ -115,4 +115,18 @@ interface TransactionDao {
 
     @Query("SELECT COUNT(*) FROM transactions WHERE category_id = :categoryId")
     suspend fun countByCategory(categoryId: Long): Int
+
+    // ---- Daily folder queries ----
+
+    @Query("SELECT * FROM transactions WHERE year = :year AND month = :month AND day = :day AND folder_id = :folderId ORDER BY timestamp DESC")
+    fun getTransactionsForFolder(year: Int, month: Int, day: Int, folderId: Long): Flow<List<Transaction>>
+
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE folder_id = :folderId AND type = 'EXPENSE'")
+    fun getExpenseTotalByFolder(folderId: Long): Flow<Long>
+
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE folder_id = :folderId AND type = 'INCOME'")
+    fun getIncomeTotalByFolder(folderId: Long): Flow<Long>
+
+    @Query("SELECT COUNT(*) FROM transactions WHERE folder_id = :folderId")
+    suspend fun countByFolder(folderId: Long): Int
 }

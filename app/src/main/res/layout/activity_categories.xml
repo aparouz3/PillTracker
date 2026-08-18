@@ -28,7 +28,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="پوشه‌ها"
+            android:text="کتگوری‌ها"
             android:textColor="@color/on_surface"
             android:textSize="17sp"
             android:textStyle="bold" />
@@ -49,7 +49,7 @@
         android:layout_height="wrap_content"
         android:paddingHorizontal="16dp"
         android:paddingBottom="8dp"
-        android:text="تراکنش‌ها را می‌توان در پوشه‌ها دسته‌بندی کرد. هر پوشه جمع جداگانه خودش را دارد."
+        android:text="دسته‌بندی کلی تراکنش‌ها (مثلاً خوراکی، حمل‌ونقل). هر کتگوری جمع جداگانه خودش را دارد. برای دسته‌بندی تراکنش‌های یک روز خاص، از پوشه‌های روزانه در صفحه اصلی استفاده کنید."
         android:textColor="@color/text_secondary"
         android:textSize="12sp" />
 

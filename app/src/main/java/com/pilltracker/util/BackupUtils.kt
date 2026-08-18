@@ -10,17 +10,18 @@ import java.io.OutputStream
 
 /**
  * Shared backup logic: builds/parses the JSON backup format.
- * Format v3: { version, exportedAt, transactions: [...], notes: [...], categories: [...] }
+ * Format v4: { version, exportedAt, transactions: [...], notes: [...], categories: [...], folders: [...] }
  */
 object BackupUtils {
 
     fun buildBackupJson(
         transactions: List<Transaction>,
         notes: List<DailyNote>,
-        categories: List<Category>
+        categories: List<Category>,
+        folders: List<com.pilltracker.data.Folder>
     ): String {
         return JSONObject().apply {
-            put("version", 3)
+            put("version", 4)
             put("exportedAt", System.currentTimeMillis())
             put("transactions", JSONArray().apply {
                 for (t in transactions) {
@@ -34,6 +35,7 @@ object BackupUtils {
                             put("month", t.month)
                             put("day", t.day)
                             if (t.categoryId != null) put("categoryId", t.categoryId)
+                            if (t.folderId != null) put("folderId", t.folderId)
                             put("timestamp", t.timestamp)
                         }
                     )
@@ -63,6 +65,19 @@ object BackupUtils {
                     )
                 }
             })
+            put("folders", JSONArray().apply {
+                for (f in folders) {
+                    put(
+                        JSONObject().apply {
+                            put("id", f.id)
+                            put("name", f.name)
+                            put("year", f.year)
+                            put("month", f.month)
+                            put("day", f.day)
+                        }
+                    )
+                }
+            })
         }.toString(2)
     }
 
@@ -70,15 +85,17 @@ object BackupUtils {
         transactions: List<Transaction>,
         notes: List<DailyNote>,
         categories: List<Category>,
+        folders: List<com.pilltracker.data.Folder>,
         out: OutputStream
     ) {
-        out.write(buildBackupJson(transactions, notes, categories).toByteArray(Charsets.UTF_8))
+        out.write(buildBackupJson(transactions, notes, categories, folders).toByteArray(Charsets.UTF_8))
     }
 
     data class BackupData(
         val transactions: List<Transaction>,
         val notes: List<DailyNote>,
-        val categories: List<Category>
+        val categories: List<Category>,
+        val folders: List<com.pilltracker.data.Folder>
     )
 
     fun parseBackup(text: String): BackupData {
@@ -97,6 +114,7 @@ object BackupUtils {
                     month = o.optInt("month", 0),
                     day = o.optInt("day", 0),
                     categoryId = if (o.has("categoryId")) o.optLong("categoryId") else null,
+                    folderId = if (o.has("folderId")) o.optLong("folderId") else null,
                     timestamp = o.optLong("timestamp", System.currentTimeMillis())
                 )
             )
@@ -131,6 +149,22 @@ object BackupUtils {
                 )
             }
         }
-        return BackupData(transactions, notes, categories)
+        val folders = mutableListOf<com.pilltracker.data.Folder>()
+        if (json.has("folders")) {
+            val fArr = json.getJSONArray("folders")
+            for (i in 0 until fArr.length()) {
+                val o = fArr.getJSONObject(i)
+                folders.add(
+                    com.pilltracker.data.Folder(
+                        id = o.optLong("id", 0),
+                        name = o.optString("name", ""),
+                        year = o.optInt("year", 0),
+                        month = o.optInt("month", 0),
+                        day = o.optInt("day", 0)
+                    )
+                )
+            }
+        }
+        return BackupData(transactions, notes, categories, folders)
     }
 }

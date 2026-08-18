@@ -63,7 +63,7 @@ class CategoriesActivity : AppCompatActivity() {
         input.hint = "نام پوشه (مثلاً: خوراکی، حمل‌ونقل، قسط)"
         input.setPadding(24, 24, 24, 24)
         MaterialAlertDialogBuilder(this)
-            .setTitle("پوشه جدید")
+            .setTitle("کتگوری جدید")
             .setView(input)
             .setPositiveButton("ساخت") { _, _ ->
                 val name = input.text?.toString()?.trim().orEmpty()

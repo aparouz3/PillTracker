@@ -32,19 +32,15 @@ import com.pilltracker.util.BackupUtils
 import com.pilltracker.util.FormatUtils
 import com.pilltracker.util.PersianCalendar
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.File
 import java.util.Calendar
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var db: com.pilltracker.data.PillTrackerDatabase
-    private lateinit var adapter: TransactionAdapter
-    private val transactions = mutableListOf<Transaction>()
+    private lateinit var adapter: DayAdapter
+    private val dayItems = mutableListOf<DayItem>()
 
     private var currentYear: Int = 0
     private var currentMonth: Int = 0
@@ -128,10 +124,11 @@ class MainActivity : AppCompatActivity() {
         fabIncome = findViewById(R.id.fabIncome)
 
         recyclerView.layoutManager = LinearLayoutManager(this)
-        adapter = TransactionAdapter(
-            transactions,
+        adapter = DayAdapter(
+            dayItems,
             onDelete = { transaction -> showDeleteDialog(transaction) },
             onEdit = { transaction -> showEditDialog(transaction) },
+            onDeleteFolder = { folder -> showDeleteFolderDialog(folder) },
             categoryNames = { categoryNameMap }
         )
         // Load category names for display in the list
@@ -203,10 +200,11 @@ class MainActivity : AppCompatActivity() {
                 val all = db.transactionDao().getAllTransactionsOnce()
                 val notes = db.noteDao().getAllNotesOnce()
                 val categories = db.categoryDao().getAllCategoriesOnce()
+                val folders = db.folderDao().getAllFoldersOnce()
                 contentResolver.openOutputStream(uri)?.use { out ->
-                    BackupUtils.writeToStream(all, notes, categories, out)
+                    BackupUtils.writeToStream(all, notes, categories, folders, out)
                 }
-                Toast.makeText(this@MainActivity, "بکاپ ذخیره شد (${all.size} تراکنش، ${notes.size} یادداشت، ${categories.size} پوشه)", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, "بکاپ ذخیره شد (${all.size} تراکنش، ${notes.size} یادداشت، ${categories.size} کتگوری، ${folders.size} پوشه)", Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, "خطا در بکاپ: ${e.message}", Toast.LENGTH_LONG).show()
             }
@@ -223,13 +221,13 @@ class MainActivity : AppCompatActivity() {
                 val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
                     ?: throw Exception("فایل خالی است")
                 val data = BackupUtils.parseBackup(text)
-                if (data.transactions.isEmpty() && data.notes.isEmpty() && data.categories.isEmpty()) {
+                if (data.transactions.isEmpty() && data.notes.isEmpty() && data.categories.isEmpty() && data.folders.isEmpty()) {
                     Toast.makeText(this@MainActivity, "فایل بکاپ معتبر نیست", Toast.LENGTH_LONG).show()
                     return@launch
                 }
                 MaterialAlertDialogBuilder(this@MainActivity)
                     .setTitle("بازیابی داده")
-                    .setMessage("${data.transactions.size} تراکنش، ${data.notes.size} یادداشت و ${data.categories.size} پوشه در فایل پیدا شد. داده فعلی با این داده جایگزین می‌شود. ادامه می‌دهید؟")
+                    .setMessage("${data.transactions.size} تراکنش، ${data.notes.size} یادداشت، ${data.categories.size} کتگوری و ${data.folders.size} پوشه در فایل پیدا شد. داده فعلی با این داده جایگزین می‌شود. ادامه می‌دهید؟")
                     .setPositiveButton("بله") { _, _ ->
                         lifecycleScope.launch {
                             db.transactionDao().deleteAll()
@@ -238,7 +236,9 @@ class MainActivity : AppCompatActivity() {
                             db.noteDao().insertAll(data.notes)
                             db.categoryDao().getAllCategoriesOnce().forEach { db.categoryDao().delete(it.id) }
                             db.categoryDao().insertAll(data.categories)
-                            Toast.makeText(this@MainActivity, "بازیابی انجام شد (${data.transactions.size} تراکنش، ${data.notes.size} یادداشت، ${data.categories.size} پوشه)", Toast.LENGTH_LONG).show()
+                            db.folderDao().deleteAll()
+                            db.folderDao().insertAll(data.folders)
+                            Toast.makeText(this@MainActivity, "بازیابی انجام شد (${data.transactions.size} تراکنش، ${data.notes.size} یادداشت، ${data.categories.size} کتگوری، ${data.folders.size} پوشه)", Toast.LENGTH_LONG).show()
                             loadData()
                             loadNote()
                         }
@@ -278,6 +278,11 @@ class MainActivity : AppCompatActivity() {
 
         fabIncome.setOnClickListener {
             showAddDialog(TransactionType.INCOME)
+        }
+
+        // Add daily folder button
+        findViewById<ImageButton>(R.id.addFolderBtn).setOnClickListener {
+            showAddFolderDialog()
         }
 
         // Daily note card
@@ -377,15 +382,27 @@ class MainActivity : AppCompatActivity() {
     private fun loadTransactions() {
         transactionsJob?.cancel()
         transactionsJob = lifecycleScope.launch {
-            db.transactionDao().getTransactionsForDate(currentYear, currentMonth, currentDay)
-                .collectLatest { list ->
-                    transactions.clear()
-                    transactions.addAll(list)
-                    adapter.notifyDataSetChanged()
-                    // Force a layout pass so the list redraws immediately (fixes blank list after add/delete)
-                    recyclerView.requestLayout()
-                    emptyText.visibility = if (transactions.isEmpty()) View.VISIBLE else View.GONE
-                }
+            // Load daily folders and transactions together, then build a grouped list:
+            // folder header (with its own totals) followed by its transactions,
+            // then transactions without a folder at the end.
+            val folders = db.folderDao().getFoldersForDateOnce(currentYear, currentMonth, currentDay)
+            val list = db.transactionDao().getTransactionsForDate(currentYear, currentMonth, currentDay).first()
+
+            dayItems.clear()
+            val byFolder = list.groupBy { it.folderId }
+            for (folder in folders) {
+                val txs = byFolder[folder.id].orEmpty()
+                val exp = txs.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
+                val inc = txs.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
+                dayItems.add(DayItem.FolderHeader(folder, exp, inc))
+                dayItems.addAll(txs.map { DayItem.Tx(it) })
+            }
+            // Transactions without any folder
+            byFolder[null].orEmpty().forEach { dayItems.add(DayItem.Tx(it)) }
+
+            adapter.notifyDataSetChanged()
+            recyclerView.requestLayout()
+            emptyText.visibility = if (dayItems.isEmpty()) View.VISIBLE else View.GONE
         }
     }
 
@@ -399,11 +416,85 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showAddFolderDialog() {
+        val input = TextInputEditText(this)
+        input.hint = "نام پوشه (مثلاً: خرید، قسط)"
+        input.setPadding(24, 24, 24, 24)
+        MaterialAlertDialogBuilder(this)
+            .setTitle("پوشه جدید برای این روز")
+            .setView(input)
+            .setPositiveButton("ساخت") { _, _ ->
+                val name = input.text?.toString()?.trim().orEmpty()
+                if (name.isNotEmpty()) {
+                    lifecycleScope.launch {
+                        db.folderDao().insert(
+                            com.pilltracker.data.Folder(
+                                name = name,
+                                year = currentYear,
+                                month = currentMonth,
+                                day = currentDay
+                            )
+                        )
+                        loadTransactions()
+                    }
+                }
+            }
+            .setNegativeButton("انصراف", null)
+            .show()
+    }
+
+    private fun showDeleteFolderDialog(folder: com.pilltracker.data.Folder) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("حذف پوشه «${folder.name}»")
+            .setMessage("تراکنش‌های داخل این پوشه حذف نمی‌شوند؛ فقط از پوشه خارج می‌شوند.")
+            .setPositiveButton("حذف") { _, _ ->
+                lifecycleScope.launch {
+                    db.folderDao().delete(folder.id)
+                    // Unlink transactions from this folder
+                    val all = db.transactionDao().getAllTransactionsOnce()
+                    for (t in all) {
+                        if (t.folderId == folder.id) {
+                            db.transactionDao().update(t.copy(folderId = null))
+                        }
+                    }
+                    loadTransactions()
+                }
+            }
+            .setNegativeButton("انصراف", null)
+            .show()
+    }
+
     private fun showAddDialog(type: TransactionType) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_transaction, null)
         val titleInput = dialogView.findViewById<TextInputEditText>(R.id.titleInput)
         val amountInput = dialogView.findViewById<TextInputEditText>(R.id.amountInput)
+        val folderDropdown = dialogView.findViewById<AutoCompleteTextView>(R.id.folderDropdown)
         val categoryDropdown = dialogView.findViewById<AutoCompleteTextView>(R.id.categoryDropdown)
+
+        // Load daily folders (for the selected day) into the dropdown
+        val folderNames = mutableListOf<String>()
+        val folderIds = mutableListOf<Long>()
+        var selectedFolderId: Long? = null
+        lifecycleScope.launch {
+            val folders = db.folderDao().getFoldersForDateOnce(currentYear, currentMonth, currentDay)
+            folderNames.clear()
+            folderIds.clear()
+            for (f in folders) {
+                folderNames.add(f.name)
+                folderIds.add(f.id)
+            }
+            folderDropdown.setAdapter(
+                ArrayAdapter(
+                    this@MainActivity,
+                    android.R.layout.simple_dropdown_item_1line,
+                    folderNames
+                )
+            )
+            folderDropdown.setText("", false)
+        }
+        folderDropdown.setOnItemClickListener { _, _, position, _ ->
+            selectedFolderId = folderIds[position]
+        }
 
         // Load categories into the dropdown
         val categoryNames = mutableListOf<String>()
@@ -460,7 +551,8 @@ class MainActivity : AppCompatActivity() {
                         year = currentYear,
                         month = currentMonth,
                         day = currentDay,
-                        categoryId = selectedCategoryId
+                        categoryId = selectedCategoryId,
+                        folderId = selectedFolderId
                     )
                 )
                 loadTransactions()
@@ -474,12 +566,40 @@ class MainActivity : AppCompatActivity() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_transaction, null)
         val titleInput = dialogView.findViewById<TextInputEditText>(R.id.titleInput)
         val amountInput = dialogView.findViewById<TextInputEditText>(R.id.amountInput)
+        val folderDropdown = dialogView.findViewById<AutoCompleteTextView>(R.id.folderDropdown)
         val categoryDropdown = dialogView.findViewById<AutoCompleteTextView>(R.id.categoryDropdown)
         val expenseBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.typeExpenseBtn)
         val incomeBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.typeIncomeBtn)
 
         titleInput.setText(transaction.title)
         amountInput.setText(transaction.amount.toString())
+
+        // Load daily folders, preselect the transaction's current folder
+        val folderNames = mutableListOf<String>()
+        val folderIds = mutableListOf<Long>()
+        var selectedFolderId: Long? = transaction.folderId
+        lifecycleScope.launch {
+            val folders = db.folderDao().getFoldersForDateOnce(currentYear, currentMonth, currentDay)
+            folderNames.clear()
+            folderIds.clear()
+            var selectedName = ""
+            for (f in folders) {
+                folderNames.add(f.name)
+                folderIds.add(f.id)
+                if (f.id == transaction.folderId) selectedName = f.name
+            }
+            folderDropdown.setAdapter(
+                ArrayAdapter(
+                    this@MainActivity,
+                    android.R.layout.simple_dropdown_item_1line,
+                    folderNames
+                )
+            )
+            folderDropdown.setText(selectedName, false)
+        }
+        folderDropdown.setOnItemClickListener { _, _, position, _ ->
+            selectedFolderId = folderIds[position]
+        }
 
         // Load categories, preselect the transaction's current folder
         val categoryNames = mutableListOf<String>()
@@ -564,7 +684,8 @@ class MainActivity : AppCompatActivity() {
                         title = title,
                         amount = amount,
                         type = selectedType,
-                        categoryId = selectedCategoryId
+                        categoryId = selectedCategoryId,
+                        folderId = selectedFolderId
                     )
                 )
                 loadTransactions()
@@ -650,15 +771,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ---- Day items ----
+    sealed class DayItem {
+        data class FolderHeader(
+            val folder: com.pilltracker.data.Folder,
+            val expenseTotal: Long,
+            val incomeTotal: Long
+        ) : DayItem()
+
+        data class Tx(val transaction: Transaction) : DayItem()
+    }
+
     // ---- Adapter ----
-    class TransactionAdapter(
-        private val items: List<Transaction>,
+    class DayAdapter(
+        private val items: List<DayItem>,
         private val onDelete: (Transaction) -> Unit,
         private val onEdit: (Transaction) -> Unit,
+        private val onDeleteFolder: (com.pilltracker.data.Folder) -> Unit,
         private val categoryNames: () -> Map<Long, String>
-    ) : RecyclerView.Adapter<TransactionAdapter.ViewHolder>() {
+    ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        companion object {
+            private const val TYPE_FOLDER = 0
+            private const val TYPE_TX = 1
+        }
+
+        inner class FolderHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val titleText: TextView = view.findViewById(R.id.folderTitle)
+            val expenseTotal: TextView = view.findViewById(R.id.folderExpenseTotal)
+            val incomeTotal: TextView = view.findViewById(R.id.folderIncomeTotal)
+            val deleteBtn: ImageButton = view.findViewById(R.id.deleteFolderBtn)
+        }
+
+        inner class TxHolder(view: View) : RecyclerView.ViewHolder(view) {
             val titleText: TextView = view.findViewById(R.id.transactionTitle)
             val amountText: TextView = view.findViewById(R.id.transactionAmount)
             val typeIcon: View = view.findViewById(R.id.typeIcon)
@@ -667,40 +812,64 @@ class MainActivity : AppCompatActivity() {
             val deleteBtn: View = view.findViewById(R.id.deleteBtn)
         }
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-            val view = LayoutInflater.from(parent.context)
-                .inflate(R.layout.item_transaction, parent, false)
-            return ViewHolder(view)
+        override fun getItemViewType(position: Int): Int {
+            return if (items[position] is DayItem.FolderHeader) TYPE_FOLDER else TYPE_TX
         }
 
-        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val item = items[position]
-            holder.titleText.text = item.title
-            holder.amountText.text = FormatUtils.formatAmountWithUnit(item.amount)
-            holder.amountText.setTextColor(
-                ContextCompat.getColor(
-                    holder.itemView.context,
-                    if (item.type == TransactionType.INCOME) R.color.income_green else R.color.expense_red
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            return if (viewType == TYPE_FOLDER) {
+                FolderHolder(
+                    LayoutInflater.from(parent.context)
+                        .inflate(R.layout.item_folder_header, parent, false)
                 )
-            )
-            holder.typeIcon.setBackgroundResource(
-                if (item.type == TransactionType.INCOME) R.drawable.ic_income_dot else R.drawable.ic_expense_dot
-            )
-            if (item.categoryId != null) {
-                val name = categoryNames()[item.categoryId]
-                if (!name.isNullOrEmpty()) {
-                    holder.categoryText.text = "📁 $name"
-                    holder.categoryText.visibility = View.VISIBLE
-                } else {
-                    holder.categoryText.visibility = View.GONE
-                }
             } else {
-                holder.categoryText.visibility = View.GONE
+                TxHolder(
+                    LayoutInflater.from(parent.context)
+                        .inflate(R.layout.item_transaction, parent, false)
+                )
             }
-            holder.editBtn.setOnClickListener { onEdit(item) }
-            holder.deleteBtn.setOnClickListener { onDelete(item) }
         }
 
         override fun getItemCount() = items.size
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            when (val item = items[position]) {
+                is DayItem.FolderHeader -> {
+                    val h = holder as FolderHolder
+                    h.titleText.text = "📁 ${item.folder.name}"
+                    h.expenseTotal.text = if (item.expenseTotal > 0) "هزینه: ${FormatUtils.formatAmount(item.expenseTotal)}" else ""
+                    h.incomeTotal.text = if (item.incomeTotal > 0) "درآمد: ${FormatUtils.formatAmount(item.incomeTotal)}" else ""
+                    h.deleteBtn.setOnClickListener { onDeleteFolder(item.folder) }
+                }
+                is DayItem.Tx -> {
+                    val h = holder as TxHolder
+                    val tx = item.transaction
+                    h.titleText.text = tx.title
+                    h.amountText.text = FormatUtils.formatAmountWithUnit(tx.amount)
+                    h.amountText.setTextColor(
+                        ContextCompat.getColor(
+                            h.itemView.context,
+                            if (tx.type == TransactionType.INCOME) R.color.income_green else R.color.expense_red
+                        )
+                    )
+                    h.typeIcon.setBackgroundResource(
+                        if (tx.type == TransactionType.INCOME) R.drawable.ic_income_dot else R.drawable.ic_expense_dot
+                    )
+                    if (tx.categoryId != null) {
+                        val name = categoryNames()[tx.categoryId]
+                        if (!name.isNullOrEmpty()) {
+                            h.categoryText.text = "🏷 $name"
+                            h.categoryText.visibility = View.VISIBLE
+                        } else {
+                            h.categoryText.visibility = View.GONE
+                        }
+                    } else {
+                        h.categoryText.visibility = View.GONE
+                    }
+                    h.editBtn.setOnClickListener { onEdit(tx) }
+                    h.deleteBtn.setOnClickListener { onDelete(tx) }
+                }
+            }
+        }
     }
 }
