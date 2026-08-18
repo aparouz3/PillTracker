@@ -17,6 +17,10 @@
         android:icon="@android:drawable/ic_menu_manage"
         android:title="کتگوری‌ها" />
     <item
+        android:id="@+id/navCrowns"
+        android:icon="@drawable/ic_crown"
+        android:title="کرون‌ها" />
+    <item
         android:id="@+id/navBackup"
         android:icon="@drawable/ic_backup"
         android:title="بکاپ‌گیری (خروجی داده)" />

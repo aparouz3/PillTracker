@@ -159,6 +159,10 @@ class MainActivity : AppCompatActivity() {
                     drawerLayout.closeDrawers()
                     startActivity(Intent(this, CategoriesActivity::class.java))
                 }
+                R.id.navCrowns -> {
+                    drawerLayout.closeDrawers()
+                    startActivity(Intent(this, CrownsActivity::class.java))
+                }
                 R.id.navBackup -> {
                     drawerLayout.closeDrawers()
                     exportBackup()
@@ -398,8 +402,12 @@ class MainActivity : AppCompatActivity() {
                 dayItems.add(DayItem.FolderHeader(folder, exp, inc))
                 dayItems.addAll(txs.map { DayItem.Tx(it) })
             }
-            // Transactions without any folder
-            byFolder[null].orEmpty().forEach { dayItems.add(DayItem.Tx(it)) }
+            // Transactions without any folder — separated with a thin dashed line
+            val unfoldered = byFolder[null].orEmpty()
+            if (unfoldered.isNotEmpty() && folders.isNotEmpty()) {
+                dayItems.add(DayItem.Separator)
+            }
+            unfoldered.forEach { dayItems.add(DayItem.Tx(it)) }
 
             adapter.notifyDataSetChanged()
             recyclerView.requestLayout()
@@ -781,6 +789,8 @@ class MainActivity : AppCompatActivity() {
         ) : DayItem()
 
         data class Tx(val transaction: Transaction) : DayItem()
+
+        object Separator : DayItem()
     }
 
     // ---- Adapter ----
@@ -795,6 +805,7 @@ class MainActivity : AppCompatActivity() {
         companion object {
             private const val TYPE_FOLDER = 0
             private const val TYPE_TX = 1
+            private const val TYPE_SEPARATOR = 2
         }
 
         inner class FolderHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -814,17 +825,24 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun getItemViewType(position: Int): Int {
-            return if (items[position] is DayItem.FolderHeader) TYPE_FOLDER else TYPE_TX
+            return when (items[position]) {
+                is DayItem.FolderHeader -> TYPE_FOLDER
+                is DayItem.Separator -> TYPE_SEPARATOR
+                else -> TYPE_TX
+            }
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-            return if (viewType == TYPE_FOLDER) {
-                FolderHolder(
+            return when (viewType) {
+                TYPE_FOLDER -> FolderHolder(
                     LayoutInflater.from(parent.context)
                         .inflate(R.layout.item_folder_header, parent, false)
                 )
-            } else {
-                TxHolder(
+                TYPE_SEPARATOR -> object : RecyclerView.ViewHolder(
+                    LayoutInflater.from(parent.context)
+                        .inflate(R.layout.item_separator, parent, false)
+                ) {}
+                else -> TxHolder(
                     LayoutInflater.from(parent.context)
                         .inflate(R.layout.item_transaction, parent, false)
                 )
@@ -845,16 +863,6 @@ class MainActivity : AppCompatActivity() {
                 is DayItem.Tx -> {
                     val h = holder as TxHolder
                     val tx = item.transaction
-                    // Small gap before the FIRST un-folder transaction (i.e. right after the LAST folder header)
-                    val isAfterFolder = position > 0 && items[position - 1] is DayItem.FolderHeader
-                    val isFirstUnfoldered = isAfterFolder && (position + 1 until items.size).none { items[it] is DayItem.FolderHeader }
-                    val lp = h.itemView.layoutParams as RecyclerView.LayoutParams
-                    lp.topMargin = if (isFirstUnfoldered) {
-                        (h.itemView.resources.displayMetrics.density * 18).toInt()
-                    } else {
-                        (h.itemView.resources.displayMetrics.density * 2).toInt()
-                    }
-                    h.itemView.layoutParams = lp
                     h.titleText.text = tx.title
                     h.amountText.text = FormatUtils.formatAmountWithUnit(tx.amount)
                     h.amountText.setTextColor(
