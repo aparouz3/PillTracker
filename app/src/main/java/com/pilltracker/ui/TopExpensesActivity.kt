@@ -173,7 +173,7 @@ class TopExpensesActivity : AppCompatActivity() {
             more.setTextColor(ContextCompat.getColor(this, R.color.primary))
             more.textSize = 13f
             more.gravity = android.view.Gravity.CENTER
-            more.textStyle = android.graphics.Typeface.BOLD
+            more.setTypeface(null, android.graphics.Typeface.BOLD)
             more.isClickable = true
             more.isFocusable = true
             val pad = (8 * resources.displayMetrics.density).toInt()
