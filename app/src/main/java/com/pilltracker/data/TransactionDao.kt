@@ -26,6 +26,28 @@ interface TransactionDao {
     @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = :type AND timestamp >= :startTs AND timestamp < :endTs")
     fun getTotalBetween(type: TransactionType, startTs: Long, endTs: Long): Flow<Long>
 
+    // Sum by Persian date range (inclusive): (sy,sm,sd) .. (ey,em,ed)
+    @Query("""
+        SELECT COALESCE(SUM(amount), 0) FROM transactions
+        WHERE type = :type AND (
+            (year > :sy) OR
+            (year = :sy AND month > :sm) OR
+            (year = :sy AND month = :sm AND day >= :sd)
+        ) AND (
+            (year < :ey) OR
+            (year = :ey AND month < :em) OR
+            (year = :ey AND month = :em AND day <= :ed)
+        )
+    """)
+    fun getTotalInPersianRange(
+        type: TransactionType,
+        sy: Int, sm: Int, sd: Int,
+        ey: Int, em: Int, ed: Int
+    ): Flow<Long>
+
+    @Update
+    suspend fun update(transaction: Transaction)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(transaction: Transaction): Long
 

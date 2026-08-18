@@ -64,11 +64,30 @@ class StatsActivity : AppCompatActivity() {
         val weekStart = PersianCalendar.getWeekStartTimestamp()
         val weekEnd = weekStart + 7 * 24 * 60 * 60 * 1000L
 
-        weekTitle.text = "جمع این هفته (از شنبه ${PersianCalendar.getPersianMonthName(today.month)})"
+        // Week as Persian dates: Saturday (weekStart) .. Friday (weekStart+6 days)
+        val saturdayCal = Calendar.getInstance().apply {
+            timeInMillis = weekStart
+        }
+        val saturdayPersian = PersianCalendar.gregorianToPersian(
+            saturdayCal.get(Calendar.YEAR), saturdayCal.get(Calendar.MONTH) + 1, saturdayCal.get(Calendar.DAY_OF_MONTH)
+        )
+        val fridayPersian = PersianCalendar.addDays(
+            saturdayPersian.year, saturdayPersian.month, saturdayPersian.day, 6
+        )
+
+        weekTitle.text = "جمع این هفته (شنبه ${saturdayPersian.day} ${PersianCalendar.getPersianMonthName(saturdayPersian.month)})"
 
         lifecycleScope.launch {
-            val wIncome = db.transactionDao().getTotalBetween(TransactionType.INCOME, weekStart, weekEnd).first()
-            val wExpense = db.transactionDao().getTotalBetween(TransactionType.EXPENSE, weekStart, weekEnd).first()
+            val wIncome = db.transactionDao().getTotalInPersianRange(
+                TransactionType.INCOME,
+                saturdayPersian.year, saturdayPersian.month, saturdayPersian.day,
+                fridayPersian.year, fridayPersian.month, fridayPersian.day
+            ).first()
+            val wExpense = db.transactionDao().getTotalInPersianRange(
+                TransactionType.EXPENSE,
+                saturdayPersian.year, saturdayPersian.month, saturdayPersian.day,
+                fridayPersian.year, fridayPersian.month, fridayPersian.day
+            ).first()
             weekIncome.text = "درآمد: ${FormatUtils.formatAmount(wIncome)} تومان"
             weekExpense.text = "هزینه: ${FormatUtils.formatAmount(wExpense)} تومان"
             weekBalance.text = "مانده: ${FormatUtils.formatAmount(wIncome - wExpense)} تومان"

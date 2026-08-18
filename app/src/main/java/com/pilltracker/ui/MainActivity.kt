@@ -117,9 +117,11 @@ class MainActivity : AppCompatActivity() {
         fabIncome = findViewById(R.id.fabIncome)
 
         recyclerView.layoutManager = LinearLayoutManager(this)
-        adapter = TransactionAdapter(transactions) { transaction ->
-            showDeleteDialog(transaction)
-        }
+        adapter = TransactionAdapter(
+            transactions,
+            onDelete = { transaction -> showDeleteDialog(transaction) },
+            onEdit = { transaction -> showEditDialog(transaction) }
+        )
         recyclerView.adapter = adapter
 
         // Navigation drawer
@@ -317,6 +319,47 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showEditDialog(transaction: Transaction) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_add_transaction, null)
+        val titleInput = dialogView.findViewById<TextInputEditText>(R.id.titleInput)
+        val amountInput = dialogView.findViewById<TextInputEditText>(R.id.amountInput)
+
+        titleInput.setText(transaction.title)
+        amountInput.setText(transaction.amount.toString())
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("ویرایش تراکنش")
+            .setView(dialogView)
+            .setPositiveButton("ذخیره") { _, _ -> }
+            .setNegativeButton("لغو", null)
+            .show()
+
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val title = titleInput.text?.toString()?.trim() ?: ""
+            val amountStr = amountInput.text?.toString()?.trim() ?: ""
+
+            if (title.isEmpty()) {
+                titleInput.error = "عنوان را وارد کنید"
+                return@setOnClickListener
+            }
+            val amount = amountStr.toLongOrNull()
+            if (amount == null || amount <= 0) {
+                amountInput.error = "مبلغ معتبر وارد کنید"
+                return@setOnClickListener
+            }
+
+            lifecycleScope.launch {
+                db.transactionDao().update(
+                    transaction.copy(
+                        title = title,
+                        amount = amount
+                    )
+                )
+            }
+            dialog.dismiss()
+        }
+    }
+
     private fun showDeleteDialog(transaction: Transaction) {
         MaterialAlertDialogBuilder(this)
             .setTitle("حذف تراکنش")
@@ -333,13 +376,15 @@ class MainActivity : AppCompatActivity() {
     // ---- Adapter ----
     class TransactionAdapter(
         private val items: List<Transaction>,
-        private val onDelete: (Transaction) -> Unit
+        private val onDelete: (Transaction) -> Unit,
+        private val onEdit: (Transaction) -> Unit
     ) : RecyclerView.Adapter<TransactionAdapter.ViewHolder>() {
 
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val titleText: TextView = view.findViewById(R.id.transactionTitle)
             val amountText: TextView = view.findViewById(R.id.transactionAmount)
             val typeIcon: View = view.findViewById(R.id.typeIcon)
+            val editBtn: View = view.findViewById(R.id.editBtn)
             val deleteBtn: View = view.findViewById(R.id.deleteBtn)
         }
 
@@ -362,6 +407,7 @@ class MainActivity : AppCompatActivity() {
             holder.typeIcon.setBackgroundResource(
                 if (item.type == TransactionType.INCOME) R.drawable.ic_income_dot else R.drawable.ic_expense_dot
             )
+            holder.editBtn.setOnClickListener { onEdit(item) }
             holder.deleteBtn.setOnClickListener { onDelete(item) }
         }
 
