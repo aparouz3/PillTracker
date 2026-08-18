@@ -70,6 +70,26 @@ interface TransactionDao {
         ey: Int, em: Int, ed: Int
     ): Flow<List<Transaction>>
 
+    // All transactions (expense or income) in a Persian date range, sorted by amount descending
+    @Query("""
+        SELECT * FROM transactions
+        WHERE type = :type AND (
+            (year > :sy) OR
+            (year = :sy AND month > :sm) OR
+            (year = :sy AND month = :sm AND day >= :sd)
+        ) AND (
+            (year < :ey) OR
+            (year = :ey AND month < :em) OR
+            (year = :ey AND month = :em AND day <= :ed)
+        )
+        ORDER BY amount DESC, timestamp DESC
+    """)
+    fun getTransactionsInPersianRange(
+        type: TransactionType,
+        sy: Int, sm: Int, sd: Int,
+        ey: Int, em: Int, ed: Int
+    ): Flow<List<Transaction>>
+
     @Update
     suspend fun update(transaction: Transaction)
 

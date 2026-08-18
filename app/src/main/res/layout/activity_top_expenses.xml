@@ -33,7 +33,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:gravity="center"
-                android:text="بیشترین هزینه‌ها"
+                android:text="بیشترین تراکنش‌ها"
                 android:textColor="@color/on_surface"
                 android:textSize="17sp"
                 android:textStyle="bold" />
@@ -58,31 +58,92 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageButton
+                        android:id="@+id/prevWeekBtn"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="هفته قبل"
+                        android:src="@android:drawable/ic_media_previous"
+                        android:tint="@color/primary" />
+
+                    <TextView
+                        android:id="@+id/weekTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="این هفته"
+                        android:textColor="@color/on_surface"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <ImageButton
+                        android:id="@+id/nextWeekBtn"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="هفته بعد"
+                        android:src="@android:drawable/ic_media_next"
+                        android:tint="@color/primary" />
+                </LinearLayout>
+
                 <TextView
-                    android:id="@+id/weekTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="این هفته"
-                    android:textColor="@color/on_surface"
-                    android:textSize="16sp"
+                    android:layout_marginTop="10dp"
+                    android:text="بیشترین هزینه‌ها"
+                    android:textColor="@color/expense_red"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
                 <LinearLayout
-                    android:id="@+id/weekList"
+                    android:id="@+id/weekExpenseList"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
                     android:orientation="vertical" />
 
                 <TextView
-                    android:id="@+id/weekEmpty"
+                    android:id="@+id/weekExpenseEmpty"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
-                    android:padding="16dp"
-                    android:text="هزینه‌ای در این هفته ثبت نشده"
+                    android:padding="8dp"
+                    android:text="هزینه‌ای ثبت نشده"
                     android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="بیشترین درآمدها"
+                    android:textColor="@color/income_green"
                     android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/weekIncomeList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/weekIncomeEmpty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="درآمدی ثبت نشده"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
                     android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -102,31 +163,92 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageButton
+                        android:id="@+id/prevMonthBtn"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="ماه قبل"
+                        android:src="@android:drawable/ic_media_previous"
+                        android:tint="@color/primary" />
+
+                    <TextView
+                        android:id="@+id/monthTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="این ماه"
+                        android:textColor="@color/on_surface"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <ImageButton
+                        android:id="@+id/nextMonthBtn"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="ماه بعد"
+                        android:src="@android:drawable/ic_media_next"
+                        android:tint="@color/primary" />
+                </LinearLayout>
+
                 <TextView
-                    android:id="@+id/monthTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="این ماه"
-                    android:textColor="@color/on_surface"
-                    android:textSize="16sp"
+                    android:layout_marginTop="10dp"
+                    android:text="بیشترین هزینه‌ها"
+                    android:textColor="@color/expense_red"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
                 <LinearLayout
-                    android:id="@+id/monthList"
+                    android:id="@+id/monthExpenseList"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
                     android:orientation="vertical" />
 
                 <TextView
-                    android:id="@+id/monthEmpty"
+                    android:id="@+id/monthExpenseEmpty"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
-                    android:padding="16dp"
-                    android:text="هزینه‌ای در این ماه ثبت نشده"
+                    android:padding="8dp"
+                    android:text="هزینه‌ای ثبت نشده"
                     android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="بیشترین درآمدها"
+                    android:textColor="@color/income_green"
                     android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/monthIncomeList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/monthIncomeEmpty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="درآمدی ثبت نشده"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
                     android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -146,31 +268,92 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageButton
+                        android:id="@+id/prevYearBtn"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="سال قبل"
+                        android:src="@android:drawable/ic_media_previous"
+                        android:tint="@color/primary" />
+
+                    <TextView
+                        android:id="@+id/yearTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:text="امسال"
+                        android:textColor="@color/on_surface"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <ImageButton
+                        android:id="@+id/nextYearBtn"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="سال بعد"
+                        android:src="@android:drawable/ic_media_next"
+                        android:tint="@color/primary" />
+                </LinearLayout>
+
                 <TextView
-                    android:id="@+id/yearTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="امسال"
-                    android:textColor="@color/on_surface"
-                    android:textSize="16sp"
+                    android:layout_marginTop="10dp"
+                    android:text="بیشترین هزینه‌ها"
+                    android:textColor="@color/expense_red"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
                 <LinearLayout
-                    android:id="@+id/yearList"
+                    android:id="@+id/yearExpenseList"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
                     android:orientation="vertical" />
 
                 <TextView
-                    android:id="@+id/yearEmpty"
+                    android:id="@+id/yearExpenseEmpty"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center"
-                    android:padding="16dp"
-                    android:text="هزینه‌ای در این سال ثبت نشده"
+                    android:padding="8dp"
+                    android:text="هزینه‌ای ثبت نشده"
                     android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="بیشترین درآمدها"
+                    android:textColor="@color/income_green"
                     android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/yearIncomeList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/yearIncomeEmpty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:padding="8dp"
+                    android:text="درآمدی ثبت نشده"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
                     android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

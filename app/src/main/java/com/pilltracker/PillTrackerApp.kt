@@ -3,11 +3,16 @@ package com.pilltracker
 import android.app.Application
 import android.os.Build
 import android.os.Environment
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.pilltracker.data.PillTrackerDatabase
+import com.pilltracker.work.DailyBackupWorker
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.util.concurrent.TimeUnit
 
 class PillTrackerApp : Application() {
 
@@ -18,6 +23,20 @@ class PillTrackerApp : Application() {
     override fun onCreate() {
         super.onCreate()
         installCrashHandler()
+        scheduleDailyBackup()
+    }
+
+    /**
+     * Schedules the automatic daily backup (runs once a day while the app is installed).
+     */
+    private fun scheduleDailyBackup() {
+        val request = PeriodicWorkRequestBuilder<DailyBackupWorker>(1, TimeUnit.DAYS)
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "daily_backup",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
     }
 
     /**

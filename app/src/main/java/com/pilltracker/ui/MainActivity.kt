@@ -187,28 +187,11 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val all = db.transactionDao().getAllTransactionsOnce()
-                val json = JSONObject().apply {
-                    put("version", 1)
-                    put("exportedAt", System.currentTimeMillis())
-                    put("transactions", JSONArray().apply {
-                        for (t in all) {
-                            put(JSONObject().apply {
-                                put("id", t.id)
-                                put("title", t.title)
-                                put("amount", t.amount)
-                                put("type", t.type.name)
-                                put("year", t.year)
-                                put("month", t.month)
-                                put("day", t.day)
-                                put("timestamp", t.timestamp)
-                            })
-                        }
-                    })
-                }
+                val notes = db.noteDao().getAllNotesOnce()
                 contentResolver.openOutputStream(uri)?.use { out ->
-                    out.write(json.toString(2).toByteArray(Charsets.UTF_8))
+                    BackupUtils.writeToStream(all, notes, out)
                 }
-                Toast.makeText(this@MainActivity, "بکاپ ذخیره شد (${all.size} تراکنش)", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, "بکاپ ذخیره شد (${all.size} تراکنش، ${notes.size} یادداشت)", Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, "خطا در بکاپ: ${e.message}", Toast.LENGTH_LONG).show()
             }
@@ -224,37 +207,23 @@ class MainActivity : AppCompatActivity() {
             try {
                 val text = contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
                     ?: throw Exception("فایل خالی است")
-                val json = JSONObject(text)
-                val arr = json.getJSONArray("transactions")
-                val list = mutableListOf<Transaction>()
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
-                    list.add(
-                        Transaction(
-                            id = o.optLong("id", 0),
-                            title = o.optString("title", ""),
-                            amount = o.optLong("amount", 0),
-                            type = if (o.optString("type") == "INCOME") TransactionType.INCOME else TransactionType.EXPENSE,
-                            year = o.optInt("year", 0),
-                            month = o.optInt("month", 0),
-                            day = o.optInt("day", 0),
-                            timestamp = o.optLong("timestamp", System.currentTimeMillis())
-                        )
-                    )
-                }
-                if (list.isEmpty()) {
+                val data = BackupUtils.parseBackup(text)
+                if (data.transactions.isEmpty() && data.notes.isEmpty()) {
                     Toast.makeText(this@MainActivity, "فایل بکاپ معتبر نیست", Toast.LENGTH_LONG).show()
                     return@launch
                 }
                 MaterialAlertDialogBuilder(this@MainActivity)
                     .setTitle("بازیابی داده")
-                    .setMessage("${list.size} تراکنش در فایل پیدا شد. داده فعلی با این داده جایگزین می‌شود. ادامه می‌دهید؟")
+                    .setMessage("${data.transactions.size} تراکنش و ${data.notes.size} یادداشت در فایل پیدا شد. داده فعلی با این داده جایگزین می‌شود. ادامه می‌دهید؟")
                     .setPositiveButton("بله") { _, _ ->
                         lifecycleScope.launch {
                             db.transactionDao().deleteAll()
-                            db.transactionDao().insertAll(list)
+                            db.transactionDao().insertAll(data.transactions)
+                            db.noteDao().deleteAll()
+                            db.noteDao().insertAll(data.notes)
+                            Toast.makeText(this@MainActivity, "بازیابی انجام شد (${data.transactions.size} تراکنش، ${data.notes.size} یادداشت)", Toast.LENGTH_LONG).show()
                             loadData()
-                            Toast.makeText(this@MainActivity, "بازیابی انجام شد (${list.size} تراکنش)", Toast.LENGTH_LONG).show()
+                            loadNote()
                         }
                     }
                     .setNegativeButton("خیر", null)

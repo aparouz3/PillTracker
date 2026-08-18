@@ -76,6 +76,49 @@
                     android:paddingHorizontal="8dp" />
             </HorizontalScrollView>
 
+            <!-- Daily note card -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/noteCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="8dp"
+                android:layout_marginTop="8dp"
+                android:clickable="true"
+                android:focusable="true"
+                app:cardCornerRadius="8dp"
+                app:cardElevation="1dp"
+                app:strokeWidth="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="10dp">
+
+                    <ImageButton
+                        android:id="@+id/noteButton"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="یادداشت روزانه"
+                        android:src="@drawable/ic_note"
+                        android:tint="@color/primary" />
+
+                    <TextView
+                        android:id="@+id/noteText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="2"
+                        android:text="یادداشتی برای این روز ثبت نشده"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- Summary Card -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
