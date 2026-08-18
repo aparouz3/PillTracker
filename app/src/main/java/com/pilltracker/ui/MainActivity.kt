@@ -262,6 +262,14 @@ class MainActivity : AppCompatActivity() {
         fabIncome.setOnClickListener {
             showAddDialog(TransactionType.INCOME)
         }
+
+        // Daily note card
+        findViewById<com.google.android.material.card.MaterialCardView>(R.id.noteCard).setOnClickListener {
+            showNoteDialog()
+        }
+        findViewById<ImageButton>(R.id.noteButton).setOnClickListener {
+            showNoteDialog()
+        }
     }
 
     private fun openCalendar() {
@@ -287,6 +295,7 @@ class MainActivity : AppCompatActivity() {
         buildDayStrip()
         loadTransactions()
         loadSummary()
+        loadNote()
     }
 
     private fun updateHeader() {
@@ -505,6 +514,67 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("خیر", null)
             .show()
+    }
+
+    // ---- Daily Note ----
+
+    private fun loadNote() {
+        lifecycleScope.launch {
+            val note = db.noteDao().getNoteForDate(currentYear, currentMonth, currentDay)
+            val noteText = findViewById<TextView>(R.id.noteText)
+            if (note != null && note.text.isNotBlank()) {
+                noteText.text = note.text
+                noteText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.on_surface))
+            } else {
+                noteText.text = "یادداشتی برای این روز ثبت نشده"
+                noteText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_secondary))
+            }
+        }
+    }
+
+    private fun showNoteDialog() {
+        lifecycleScope.launch {
+            val existing = db.noteDao().getNoteForDate(currentYear, currentMonth, currentDay)
+            val noteEdit = TextInputEditText(this@MainActivity)
+            noteEdit.setText(existing?.text ?: "")
+            noteEdit.gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            noteEdit.setMinLines(4)
+            noteEdit.setMaxLines(8)
+            val pad = (12 * resources.displayMetrics.density).toInt()
+            noteEdit.setPadding(pad, pad, pad, pad)
+
+            val dateStr = "${currentDay} ${PersianCalendar.getPersianMonthName(currentMonth)} $currentYear"
+
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle("یادداشت روزانه — $dateStr")
+                .setView(noteEdit)
+                .setPositiveButton("ذخیره") { _, _ ->
+                    val text = noteEdit.text?.toString()?.trim() ?: ""
+                    lifecycleScope.launch {
+                        if (text.isEmpty()) {
+                            db.noteDao().deleteForDate(currentYear, currentMonth, currentDay)
+                        } else {
+                            db.noteDao().insert(
+                                com.pilltracker.data.DailyNote(
+                                    year = currentYear,
+                                    month = currentMonth,
+                                    day = currentDay,
+                                    text = text
+                                )
+                            )
+                        }
+                        loadNote()
+                    }
+                }
+                .setNegativeButton("انصراف", null)
+                .setNeutralButton("حذف یادداشت") { _, _ ->
+                    lifecycleScope.launch {
+                        db.noteDao().deleteForDate(currentYear, currentMonth, currentDay)
+                        loadNote()
+                    }
+                }
+                .show()
+        }
     }
 
     // ---- Adapter ----
