@@ -2,6 +2,7 @@ package com.pilltracker.ui
 
 import android.os.Bundle
 import android.view.View
+import android.widget.ImageButton
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -31,6 +32,11 @@ class StatsActivity : AppCompatActivity() {
     private lateinit var yearExpense: TextView
     private lateinit var yearBalance: TextView
 
+    // Navigation offsets (0 = current, -1 = previous, 1 = next)
+    private var weekOffset = 0
+    private var monthOffset = 0
+    private var yearOffset = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_stats)
@@ -52,65 +58,109 @@ class StatsActivity : AppCompatActivity() {
 
         findViewById<View>(R.id.backBtn).setOnClickListener { finish() }
 
-        loadStats()
+        findViewById<ImageButton>(R.id.prevWeekBtn).setOnClickListener { weekOffset--; loadWeek() }
+        findViewById<ImageButton>(R.id.nextWeekBtn).setOnClickListener { weekOffset++; loadWeek() }
+        findViewById<ImageButton>(R.id.prevMonthBtn).setOnClickListener { monthOffset--; loadMonth() }
+        findViewById<ImageButton>(R.id.nextMonthBtn).setOnClickListener { monthOffset++; loadMonth() }
+        findViewById<ImageButton>(R.id.prevYearBtn).setOnClickListener { yearOffset--; loadYear() }
+        findViewById<ImageButton>(R.id.nextYearBtn).setOnClickListener { yearOffset++; loadYear() }
+
+        loadAll()
     }
 
-    private fun loadStats() {
-        val cal = Calendar.getInstance()
+    private fun loadAll() {
+        loadWeek()
+        loadMonth()
+        loadYear()
+    }
+
+    private fun loadWeek() {
+        val now = Calendar.getInstance()
         val today = PersianCalendar.gregorianToPersian(
-            cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)
+            now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1, now.get(Calendar.DAY_OF_MONTH)
         )
 
-        val weekStart = PersianCalendar.getWeekStartTimestamp()
-        val weekEnd = weekStart + 7 * 24 * 60 * 60 * 1000L
+        // Week start (Saturday) of the current week + offset weeks
+        val weekStartTs = PersianCalendar.getWeekStartTimestamp() + weekOffset * 7L * 24 * 60 * 60 * 1000L
+        val weekStartCal = Calendar.getInstance().apply { timeInMillis = weekStartTs }
+        val saturday = PersianCalendar.gregorianToPersian(
+            weekStartCal.get(Calendar.YEAR), weekStartCal.get(Calendar.MONTH) + 1, weekStartCal.get(Calendar.DAY_OF_MONTH)
+        )
+        val friday = PersianCalendar.addDays(saturday.year, saturday.month, saturday.day, 6)
 
-        // Week as Persian dates: Saturday (weekStart) .. Friday (weekStart+6 days)
-        val saturdayCal = Calendar.getInstance().apply {
-            timeInMillis = weekStart
+        val isCurrent = weekOffset == 0
+        weekTitle.text = if (isCurrent) {
+            "جمع این هفته (شنبه ${saturday.day} ${PersianCalendar.getPersianMonthName(saturday.month)})"
+        } else {
+            "هفته ${saturday.day} ${PersianCalendar.getPersianMonthName(saturday.month)} $saturday.year"
         }
-        val saturdayPersian = PersianCalendar.gregorianToPersian(
-            saturdayCal.get(Calendar.YEAR), saturdayCal.get(Calendar.MONTH) + 1, saturdayCal.get(Calendar.DAY_OF_MONTH)
-        )
-        val fridayPersian = PersianCalendar.addDays(
-            saturdayPersian.year, saturdayPersian.month, saturdayPersian.day, 6
-        )
-
-        weekTitle.text = "جمع این هفته (شنبه ${saturdayPersian.day} ${PersianCalendar.getPersianMonthName(saturdayPersian.month)})"
 
         lifecycleScope.launch {
-            val wIncome = db.transactionDao().getTotalInPersianRange(
+            val income = db.transactionDao().getTotalInPersianRange(
                 TransactionType.INCOME,
-                saturdayPersian.year, saturdayPersian.month, saturdayPersian.day,
-                fridayPersian.year, fridayPersian.month, fridayPersian.day
+                saturday.year, saturday.month, saturday.day,
+                friday.year, friday.month, friday.day
             ).first()
-            val wExpense = db.transactionDao().getTotalInPersianRange(
+            val expense = db.transactionDao().getTotalInPersianRange(
                 TransactionType.EXPENSE,
-                saturdayPersian.year, saturdayPersian.month, saturdayPersian.day,
-                fridayPersian.year, fridayPersian.month, fridayPersian.day
+                saturday.year, saturday.month, saturday.day,
+                friday.year, friday.month, friday.day
             ).first()
-            weekIncome.text = "درآمد: ${FormatUtils.formatAmount(wIncome)} تومان"
-            weekExpense.text = "هزینه: ${FormatUtils.formatAmount(wExpense)} تومان"
-            weekBalance.text = "مانده: ${FormatUtils.formatAmount(wIncome - wExpense)} تومان"
+            weekIncome.text = "درآمد: ${FormatUtils.formatAmount(income)} تومان"
+            weekExpense.text = "هزینه: ${FormatUtils.formatAmount(expense)} تومان"
+            weekBalance.text = "مانده: ${FormatUtils.formatAmount(income - expense)} تومان"
+        }
+    }
+
+    private fun loadMonth() {
+        val now = Calendar.getInstance()
+        val today = PersianCalendar.gregorianToPersian(
+            now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1, now.get(Calendar.DAY_OF_MONTH)
+        )
+
+        // Month arithmetic in the Persian calendar (offset months, handling year rollover)
+        var month = today.month + monthOffset
+        var year = today.year
+        while (month < 1) { month += 12; year-- }
+        while (month > 12) { month -= 12; year++ }
+
+        val isCurrent = monthOffset == 0
+        monthTitle.text = if (isCurrent) {
+            "جمع ${PersianCalendar.getPersianMonthName(month)} (این ماه)"
+        } else {
+            "جمع ${PersianCalendar.getPersianMonthName(month)} $year"
         }
 
-        monthTitle.text = "جمع ${PersianCalendar.getPersianMonthName(today.month)} $today.year"
-
         lifecycleScope.launch {
-            val mIncome = db.transactionDao().getMonthlyTotal(TransactionType.INCOME, today.year, today.month).first()
-            val mExpense = db.transactionDao().getMonthlyTotal(TransactionType.EXPENSE, today.year, today.month).first()
-            monthIncome.text = "درآمد: ${FormatUtils.formatAmount(mIncome)} تومان"
-            monthExpense.text = "هزینه: ${FormatUtils.formatAmount(mExpense)} تومان"
-            monthBalance.text = "مانده: ${FormatUtils.formatAmount(mIncome - mExpense)} تومان"
+            val income = db.transactionDao().getMonthlyTotal(TransactionType.INCOME, year, month).first()
+            val expense = db.transactionDao().getMonthlyTotal(TransactionType.EXPENSE, year, month).first()
+            monthIncome.text = "درآمد: ${FormatUtils.formatAmount(income)} تومان"
+            monthExpense.text = "هزینه: ${FormatUtils.formatAmount(expense)} تومان"
+            monthBalance.text = "مانده: ${FormatUtils.formatAmount(income - expense)} تومان"
+        }
+    }
+
+    private fun loadYear() {
+        val now = Calendar.getInstance()
+        val today = PersianCalendar.gregorianToPersian(
+            now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1, now.get(Calendar.DAY_OF_MONTH)
+        )
+
+        val year = today.year + yearOffset
+
+        val isCurrent = yearOffset == 0
+        yearTitle.text = if (isCurrent) {
+            "جمع سال $year (امسال)"
+        } else {
+            "جمع سال $year"
         }
 
-        yearTitle.text = "جمع سال $today.year"
-
         lifecycleScope.launch {
-            val yIncome = db.transactionDao().getYearlyTotal(TransactionType.INCOME, today.year).first()
-            val yExpense = db.transactionDao().getYearlyTotal(TransactionType.EXPENSE, today.year).first()
-            yearIncome.text = "درآمد: ${FormatUtils.formatAmount(yIncome)} تومان"
-            yearExpense.text = "هزینه: ${FormatUtils.formatAmount(yExpense)} تومان"
-            yearBalance.text = "مانده: ${FormatUtils.formatAmount(yIncome - yExpense)} تومان"
+            val income = db.transactionDao().getYearlyTotal(TransactionType.INCOME, year).first()
+            val expense = db.transactionDao().getYearlyTotal(TransactionType.EXPENSE, year).first()
+            yearIncome.text = "درآمد: ${FormatUtils.formatAmount(income)} تومان"
+            yearExpense.text = "هزینه: ${FormatUtils.formatAmount(expense)} تومان"
+            yearBalance.text = "مانده: ${FormatUtils.formatAmount(income - expense)} تومان"
         }
     }
 }
