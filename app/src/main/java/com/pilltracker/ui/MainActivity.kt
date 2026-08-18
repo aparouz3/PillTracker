@@ -845,6 +845,16 @@ class MainActivity : AppCompatActivity() {
                 is DayItem.Tx -> {
                     val h = holder as TxHolder
                     val tx = item.transaction
+                    // Small gap before the FIRST un-folder transaction (i.e. right after the LAST folder header)
+                    val isAfterFolder = position > 0 && items[position - 1] is DayItem.FolderHeader
+                    val isFirstUnfoldered = isAfterFolder && (position + 1 until items.size).none { items[it] is DayItem.FolderHeader }
+                    val lp = h.itemView.layoutParams as RecyclerView.LayoutParams
+                    lp.topMargin = if (isFirstUnfoldered) {
+                        (h.itemView.resources.displayMetrics.density * 18).toInt()
+                    } else {
+                        (h.itemView.resources.displayMetrics.density * 2).toInt()
+                    }
+                    h.itemView.layoutParams = lp
                     h.titleText.text = tx.title
                     h.amountText.text = FormatUtils.formatAmountWithUnit(tx.amount)
                     h.amountText.setTextColor(
