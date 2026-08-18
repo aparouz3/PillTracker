@@ -9,6 +9,12 @@ import java.util.Calendar
  */
 object PersianCalendar {
 
+    /**
+     * Year offset so the displayed Persian year starts from 2585
+     * (real 1405 -> shown 2585). Applied on every conversion.
+     */
+    const val YEAR_OFFSET = 1180
+
     private val persianMonthNames = arrayOf(
         "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
         "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
@@ -134,14 +140,14 @@ object PersianCalendar {
      */
     fun gregorianToPersian(gYear: Int, gMonth: Int, gDay: Int): PersianDate {
         val j = d2j(g2d(gYear, gMonth, gDay))
-        return PersianDate(j[0], j[1], j[2])
+        return PersianDate(j[0] + YEAR_OFFSET, j[1], j[2])
     }
 
     /**
      * Convert Persian to Gregorian date.
      */
     fun persianToGregorian(pYear: Int, pMonth: Int, pDay: Int): Triple<Int, Int, Int> {
-        val g = d2g(j2d(pYear, pMonth, pDay))
+        val g = d2g(j2d(pYear - YEAR_OFFSET, pMonth, pDay))
         return Triple(g[0], g[1], g[2])
     }
 

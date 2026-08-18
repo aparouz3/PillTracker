@@ -221,8 +221,8 @@ class MainActivity : AppCompatActivity() {
             todayCal.get(Calendar.YEAR), todayCal.get(Calendar.MONTH) + 1, todayCal.get(Calendar.DAY_OF_MONTH)
         )
 
-        // 7 days: from (selected-6) to (selected)
-        for (offset in -6..0) {
+        // 7 days: from (selected-3) to (selected+3) — selected day in the middle
+        for (offset in -3..3) {
             val d = PersianCalendar.addDays(currentYear, currentMonth, currentDay, offset)
             val cell = layoutInflater.inflate(R.layout.item_day_strip, dayStrip, false)
 
@@ -323,9 +323,40 @@ class MainActivity : AppCompatActivity() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_transaction, null)
         val titleInput = dialogView.findViewById<TextInputEditText>(R.id.titleInput)
         val amountInput = dialogView.findViewById<TextInputEditText>(R.id.amountInput)
+        val expenseBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.typeExpenseBtn)
+        val incomeBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.typeIncomeBtn)
 
         titleInput.setText(transaction.title)
         amountInput.setText(transaction.amount.toString())
+
+        // Type selector: highlight the current type, tap to switch
+        var selectedType = transaction.type
+        fun updateTypeButtons() {
+            val isExpense = selectedType == TransactionType.EXPENSE
+            expenseBtn.isChecked = isExpense
+            incomeBtn.isChecked = !isExpense
+            expenseBtn.setBackgroundColor(
+                ContextCompat.getColor(this, if (isExpense) R.color.expense_red else android.R.color.transparent)
+            )
+            incomeBtn.setBackgroundColor(
+                ContextCompat.getColor(this, if (!isExpense) R.color.income_green else android.R.color.transparent)
+            )
+            expenseBtn.setTextColor(
+                ContextCompat.getColor(this, if (isExpense) android.R.color.white else R.color.expense_red)
+            )
+            incomeBtn.setTextColor(
+                ContextCompat.getColor(this, if (!isExpense) android.R.color.white else R.color.income_green)
+            )
+        }
+        updateTypeButtons()
+        expenseBtn.setOnClickListener {
+            selectedType = TransactionType.EXPENSE
+            updateTypeButtons()
+        }
+        incomeBtn.setOnClickListener {
+            selectedType = TransactionType.INCOME
+            updateTypeButtons()
+        }
 
         val dialog = MaterialAlertDialogBuilder(this)
             .setTitle("ویرایش تراکنش")
@@ -352,7 +383,8 @@ class MainActivity : AppCompatActivity() {
                 db.transactionDao().update(
                     transaction.copy(
                         title = title,
-                        amount = amount
+                        amount = amount,
+                        type = selectedType
                     )
                 )
             }
