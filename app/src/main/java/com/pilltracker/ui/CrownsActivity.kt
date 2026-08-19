@@ -109,18 +109,28 @@ class CrownsActivity : AppCompatActivity() {
     private fun fetchGoldPrice(): String? {
         return try {
             val url = "https://www.iranjib.ir/showgroup/45/%D9%82%DB%8C%D9%85%D8%AA-%D8%AE%D9%88%D8%AF%D8%B1%D9%88-%D8%AA%D9%88%D9%84%DB%8C%D8%AF-%D8%AF%D8%A7%D8%AE%D9%84/"
-            val html = URL(url).readText()
-            // Look for تارا in table - generic pattern capturing number with commas
-            val regex = Regex("طارا[^<]*</td>\\s*<td[^>]*>([\\d,]+)</td>", RegexOption.IGNORE_CASE)
+            val conn = URL(url).openConnection() as java.net.HttpURLConnection
+            conn.setRequestProperty(
+                "User-Agent",
+                "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
+            )
+            conn.connectTimeout = 10000
+            conn.readTimeout = 10000
+            val html = conn.inputStream.bufferedReader().use { it.readText() }
+            // Site spells it تارا (with ت). Price is in the first row: name cell then
+            // <td><span class="lastprice">۱,۹۶۲,۰۰۰,۰۰۰</span></td>
+            val regex = Regex(
+                ">تارا[^<]*</a></td>\\s*<td[^>]*>\\s*<span[^>]*class=\"lastprice\"[^>]*>([۰-۹0-9,]+)</span>"
+            )
             val match = regex.find(html)
             if (match != null) {
-                "قیمت تارا: ${match.groupValues[1].trim()} تومان"
+                "قیمت تارا: ${toAsciiDigits(match.groupValues[1].trim())} تومان"
             } else {
-                // Fallback: any number pattern near تارا
-                val altRegex = Regex("طارا[^<]*?([\\d,]{4,})", RegexOption.IGNORE_CASE)
+                // Fallback: first lastprice span anywhere after the تارا name cell
+                val altRegex = Regex(">تارا[^<]*</a></td>.*?class=\"lastprice\">([۰-۹0-9,]+)<", RegexOption.DOT_MATCHES_ALL)
                 val altMatch = altRegex.find(html)
                 if (altMatch != null) {
-                    "قیمت تارا: ${altMatch.groupValues[1].trim()} تومان"
+                    "قیمت تارا: ${toAsciiDigits(altMatch.groupValues[1].trim())} تومان"
                 } else {
                     null
                 }
@@ -129,6 +139,10 @@ class CrownsActivity : AppCompatActivity() {
             null
         }
     }
+
+    private fun toAsciiDigits(s: String): String = s
+        .replace('۰', '0').replace('۱', '1').replace('۲', '2').replace('۳', '3').replace('۴', '4')
+        .replace('۵', '5').replace('۶', '6').replace('۷', '7').replace('۸', '8').replace('۹', '9')
 
     // ---- Food Suggestion ----
     private fun loadFoodSuggestion() {
@@ -221,34 +235,69 @@ class CrownsActivity : AppCompatActivity() {
                 cal.get(Calendar.MONTH) + 1,
                 cal.get(Calendar.DAY_OF_MONTH)
             )
-            // PersianCalendar week starts on Saturday=1 ... Friday=7
+            // PersianCalendar week starts on Saturday=0 ... Friday=6
             val dayOfWeek = PersianCalendar.getPersianWeekDayIndex(today.year, today.month, today.day)
             val dayName = PersianCalendar.getPersianWeekDayNameForDate(today.year, today.month, today.day)
 
             // Read schedule JSON from assets
             val json = readScheduleJson()
-            val dayClasses = json?.optJSONArray(getDayKey(dayOfWeek)) ?: JSONArray()
 
             withContext(Dispatchers.Main) {
                 scheduleTodayLabel.text = "امروز ($dayName ${today.day} ${PersianCalendar.getPersianMonthName(today.month)})"
 
                 scheduleListContainer.removeAllViews()
-                if (dayClasses.length() == 0) {
-                    scheduleEmptyText.visibility = View.VISIBLE
-                } else {
-                    scheduleEmptyText.visibility = View.GONE
-                    for (i in 0 until dayClasses.length()) {
-                        val cls = dayClasses.getJSONObject(i)
-                        addScheduleRow(cls.optString("time"), cls.optString("subject"), cls.optString("teacher"))
+                var totalClasses = 0
+                val dayKeys = arrayOf(
+                    "saturday", "sunday", "monday", "tuesday",
+                    "wednesday", "thursday", "friday"
+                )
+                val dayNames = arrayOf(
+                    "شنبه", "یک‌شنبه", "دوشنبه", "سه‌شنبه",
+                    "چهارشنبه", "پنج‌شنبه", "جمعه"
+                )
+                for (d in 0..6) {
+                    val dayClasses = json?.optJSONArray(dayKeys[d]) ?: JSONArray()
+                    totalClasses += dayClasses.length()
+                    addDayHeader(dayNames[d], d == dayOfWeek)
+                    if (dayClasses.length() == 0) {
+                        addEmptyDayRow(if (d == dayOfWeek) "امروز کلاسی نداری 🎉" else "—")
+                    } else {
+                        for (i in 0 until dayClasses.length()) {
+                            val cls = dayClasses.getJSONObject(i)
+                            addScheduleRow(cls.optString("time"), cls.optString("subject"), cls.optString("teacher"))
+                        }
                     }
                 }
+                scheduleEmptyText.visibility = if (totalClasses == 0) View.VISIBLE else View.GONE
             }
         }
     }
 
+    private fun addDayHeader(dayName: String, isToday: Boolean) {
+        val header = TextView(this).apply {
+            text = if (isToday) "📌 $dayName (امروز)" else "📅 $dayName"
+            textSize = 14f
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(resources.getColor(R.color.primary_variant, null))
+            setPadding(0, dp(8), 0, dp(4))
+        }
+        scheduleListContainer.addView(header)
+    }
+
+    private fun addEmptyDayRow(text: String) {
+        val row = TextView(this).apply {
+            this.text = text
+            textSize = 12f
+            setTextColor(resources.getColor(R.color.text_secondary, null))
+            setPadding(dp(12), 0, 0, 0)
+        }
+        scheduleListContainer.addView(row)
+    }
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
+
     private fun addScheduleRow(time: String, subject: String, teacher: String) {
-        val row = LayoutInflater.from(this).inflate(R.layout.item_day_strip, null)
-        // Reuse a simple layout: we create custom views instead
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 6, 0, 6)
@@ -281,20 +330,6 @@ class CrownsActivity : AppCompatActivity() {
         container.addView(subjectView)
         container.addView(teacherView)
         scheduleListContainer.addView(container)
-    }
-
-    private fun getDayKey(dayOfWeek: Int): String {
-        // dayOfWeek is 0=Saturday ... 6=Friday from getPersianWeekDayIndex
-        return when (dayOfWeek) {
-            0 -> "saturday"
-            1 -> "sunday"
-            2 -> "monday"
-            3 -> "tuesday"
-            4 -> "wednesday"
-            5 -> "thursday"
-            6 -> "friday"
-            else -> "saturday"
-        }
     }
 
     private fun readScheduleJson(): JSONObject? {
