@@ -23,7 +23,7 @@ interface PriceHistoryDao {
     suspend fun deleteAll()
 
     @Query("SELECT * FROM price_history ORDER BY dateKey DESC LIMIT 30")
-    suspend fun getRecent(limit: Int = 30): List<PriceHistory>
+    suspend fun getRecent(): List<PriceHistory>
 }
 
 @Dao

@@ -118,7 +118,7 @@ class CrownsActivity : AppCompatActivity() {
                         db.priceHistoryDao().insert(PriceHistory(dateKey = dateKey, price = price))
                     }
                 }
-                val history = db.priceHistoryDao().getRecent(30)
+                val history = db.priceHistoryDao().getRecent()
                 withContext(Dispatchers.Main) {
                     goldProgress.visibility = View.GONE
                     if (price != null) {
