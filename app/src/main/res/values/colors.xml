@@ -16,4 +16,5 @@
     <color name="calendar_day">#FF37474F</color>
     <color name="calendar_day_disabled">#FFB0BEC5</color>
     <color name="divider">#FFECEFF1</color>
+    <color name="separator_gray">#FFB0BEC5</color>
 </resources>
