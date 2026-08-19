@@ -1,6 +1,9 @@
 package com.pilltracker.ui
 
 import android.Manifest
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -20,6 +23,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
@@ -36,6 +40,7 @@ import com.pilltracker.data.TransactionType
 import com.pilltracker.util.BackupUtils
 import com.pilltracker.util.FormatUtils
 import com.pilltracker.util.PersianCalendar
+import com.pilltracker.work.CrownsNotifier
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -88,6 +93,54 @@ class MainActivity : AppCompatActivity() {
         setupListeners()
         loadData()
         requestNotificationPermission()
+        checkTomorrowNoteNotification()
+    }
+
+    /**
+     * When the app is opened, checks whether tomorrow has a daily note.
+     * If yes, shows a notification (only once per day). No notification otherwise.
+     */
+    private fun checkTomorrowNoteNotification() {
+        lifecycleScope.launch {
+            try {
+                val cal = Calendar.getInstance()
+                val today = PersianCalendar.gregorianToPersian(
+                    cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)
+                )
+                val todayKey = "${today.year}-${today.month}-${today.day}"
+                val prefs = CrownsNotifier.prefs(this@MainActivity)
+                val lastShown = prefs.getString(CrownsNotifier.KEY_LAST_NOTE_NOTIF, "")
+                if (lastShown == todayKey) return@launch // already notified today
+
+                val tomorrow = PersianCalendar.addDays(today.year, today.month, today.day, 1)
+                val note = db.noteDao().getNoteForDate(tomorrow.year, tomorrow.month, tomorrow.day)
+                if (note == null || note.text.isBlank()) return@launch
+
+                prefs.edit().putString(CrownsNotifier.KEY_LAST_NOTE_NOTIF, todayKey).apply()
+                showTomorrowNoteNotification(note.text)
+            } catch (e: Exception) {
+                // silent
+            }
+        }
+    }
+
+    private fun showTomorrowNoteNotification(noteText: String) {
+        CrownsNotifier.ensureChannel(this)
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val intent = Intent(this, MainActivity::class.java)
+        val pi = PendingIntent.getActivity(
+            this, 2100, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, CrownsNotifier.CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("📝 یادداشت فردا")
+            .setContentText(noteText.take(60))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(noteText))
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .build()
+        nm.notify(2100, notification)
     }
 
     private fun requestNotificationPermission() {

@@ -31,6 +31,7 @@ object CrownsNotifier {
     const val KEY_LAST_FOOD_NAME = "last_food_name"
     const val KEY_TODAY_FOOD = "today_food" // food locked for today
     const val KEY_TODAY_FOOD_DATE = "today_food_date"
+    const val KEY_LAST_NOTE_NOTIF = "last_note_notif_date"
 
     const val CHANNEL_ID = "crowns_daily"
 
