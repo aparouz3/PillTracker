@@ -70,11 +70,11 @@ class PeriodExpensesActivity : AppCompatActivity() {
         }
 
         loadSection(
-            "expenseList", "expenseEmpty", TransactionType.EXPENSE,
+            R.id.expenseList, R.id.expenseEmpty, TransactionType.EXPENSE,
             saturday.year, saturday.month, saturday.day, friday.year, friday.month, friday.day
         )
         loadSection(
-            "incomeList", "incomeEmpty", TransactionType.INCOME,
+            R.id.incomeList, R.id.incomeEmpty, TransactionType.INCOME,
             saturday.year, saturday.month, saturday.day, friday.year, friday.month, friday.day
         )
     }
@@ -96,8 +96,8 @@ class PeriodExpensesActivity : AppCompatActivity() {
         }
 
         val lastDay = PersianCalendar.getPersianMonthDays(year, month)
-        loadSection("expenseList", "expenseEmpty", TransactionType.EXPENSE, year, month, 1, year, month, lastDay)
-        loadSection("incomeList", "incomeEmpty", TransactionType.INCOME, year, month, 1, year, month, lastDay)
+        loadSection(R.id.expenseList, R.id.expenseEmpty, TransactionType.EXPENSE, year, month, 1, year, month, lastDay)
+        loadSection(R.id.incomeList, R.id.incomeEmpty, TransactionType.INCOME, year, month, 1, year, month, lastDay)
     }
 
     private fun loadYear() {
@@ -113,12 +113,12 @@ class PeriodExpensesActivity : AppCompatActivity() {
             "سال $year"
         }
 
-        loadSection("expenseList", "expenseEmpty", TransactionType.EXPENSE, year, 1, 1, year, 12, 31)
-        loadSection("incomeList", "incomeEmpty", TransactionType.INCOME, year, 1, 1, year, 12, 31)
+        loadSection(R.id.expenseList, R.id.expenseEmpty, TransactionType.EXPENSE, year, 1, 1, year, 12, 31)
+        loadSection(R.id.incomeList, R.id.incomeEmpty, TransactionType.INCOME, year, 1, 1, year, 12, 31)
     }
 
     private fun loadSection(
-        listId: String, emptyId: String, type: TransactionType,
+        listId: Int, emptyId: Int, type: TransactionType,
         sy: Int, sm: Int, sd: Int, ey: Int, em: Int, ed: Int
     ) {
         val listContainer = findViewById<LinearLayout>(listId)
