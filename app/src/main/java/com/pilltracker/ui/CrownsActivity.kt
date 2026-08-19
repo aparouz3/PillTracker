@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -221,7 +222,7 @@ class CrownsActivity : AppCompatActivity() {
                 cal.get(Calendar.DAY_OF_MONTH)
             )
             // PersianCalendar week starts on Saturday=1 ... Friday=7
-            val dayOfWeek = PersianCalendar.getPersianWeekDayNumber(today.year, today.month, today.day)
+            val dayOfWeek = PersianCalendar.getPersianWeekDayIndex(today.year, today.month, today.day)
             val dayName = PersianCalendar.getPersianWeekDayNameForDate(today.year, today.month, today.day)
 
             // Read schedule JSON from assets

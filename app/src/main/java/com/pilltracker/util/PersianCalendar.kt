@@ -186,11 +186,19 @@ object PersianCalendar {
      * Persian weekday name for a specific Persian date.
      */
     fun getPersianWeekDayNameForDate(year: Int, month: Int, day: Int): String {
+        val index = getPersianWeekDayIndex(year, month, day)
+        return persianWeekDays[index]
+    }
+
+    /**
+     * Get the Persian weekday index (0=Saturday ... 6=Friday) for a specific Persian date.
+     */
+    fun getPersianWeekDayIndex(year: Int, month: Int, day: Int): Int {
         val g = persianToGregorian(year, month, day)
         val cal = Calendar.getInstance()
         cal.clear()
         cal.set(g.first, g.second - 1, g.third)
-        return getPersianWeekDayName(cal.get(Calendar.DAY_OF_WEEK))
+        return cal.get(Calendar.DAY_OF_WEEK) % 7 // 0=Saturday .. 6=Friday
     }
 
     /**
