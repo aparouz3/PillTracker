@@ -78,6 +78,8 @@ class CrownsActivity : AppCompatActivity() {
         findViewById<View>(R.id.foodCard).setOnClickListener { showFoodListDialog() }
 
         // Load class schedule
+        findViewById<View>(R.id.prevDayBtn).setOnClickListener { dayOffset--; loadSchedule() }
+        findViewById<View>(R.id.nextDayBtn).setOnClickListener { dayOffset++; loadSchedule() }
         loadSchedule()
     }
 
@@ -226,76 +228,52 @@ class CrownsActivity : AppCompatActivity() {
     }
 
     // ---- Class Schedule ----
+    private var dayOffset = 0 // 0 = today, -1 = yesterday, +1 = tomorrow
+
     private fun loadSchedule() {
         lifecycleScope.launch {
-            // Determine today's Persian day-of-week
             val cal = Calendar.getInstance()
             val today = PersianCalendar.gregorianToPersian(
                 cal.get(Calendar.YEAR),
                 cal.get(Calendar.MONTH) + 1,
                 cal.get(Calendar.DAY_OF_MONTH)
             )
-            // PersianCalendar week starts on Saturday=0 ... Friday=6
-            val dayOfWeek = PersianCalendar.getPersianWeekDayIndex(today.year, today.month, today.day)
-            val dayName = PersianCalendar.getPersianWeekDayNameForDate(today.year, today.month, today.day)
+            // 0=Saturday ... 6=Friday
+            val todayWeekday = PersianCalendar.getPersianWeekDayIndex(today.year, today.month, today.day)
+
+            // Selected day: today + offset; weekday cycles within the week
+            val selectedWeekday = ((todayWeekday + dayOffset) % 7 + 7) % 7
+            val selectedDate = PersianCalendar.addDays(today.year, today.month, today.day, dayOffset)
+            val dayName = PersianCalendar.getPersianWeekDayNameForDate(selectedDate.year, selectedDate.month, selectedDate.day)
 
             // Read schedule JSON from assets
             val json = readScheduleJson()
 
             withContext(Dispatchers.Main) {
-                scheduleTodayLabel.text = "امروز ($dayName ${today.day} ${PersianCalendar.getPersianMonthName(today.month)})"
+                scheduleTodayLabel.text = if (dayOffset == 0) {
+                    "امروز ($dayName ${selectedDate.day} ${PersianCalendar.getPersianMonthName(selectedDate.month)})"
+                } else {
+                    "$dayName ${selectedDate.day} ${PersianCalendar.getPersianMonthName(selectedDate.month)}"
+                }
 
                 scheduleListContainer.removeAllViews()
-                var totalClasses = 0
                 val dayKeys = arrayOf(
                     "saturday", "sunday", "monday", "tuesday",
                     "wednesday", "thursday", "friday"
                 )
-                val dayNames = arrayOf(
-                    "شنبه", "یک‌شنبه", "دوشنبه", "سه‌شنبه",
-                    "چهارشنبه", "پنج‌شنبه", "جمعه"
-                )
-                for (d in 0..6) {
-                    val dayClasses = json?.optJSONArray(dayKeys[d]) ?: JSONArray()
-                    totalClasses += dayClasses.length()
-                    addDayHeader(dayNames[d], d == dayOfWeek)
-                    if (dayClasses.length() == 0) {
-                        addEmptyDayRow(if (d == dayOfWeek) "امروز کلاسی نداری 🎉" else "—")
-                    } else {
-                        for (i in 0 until dayClasses.length()) {
-                            val cls = dayClasses.getJSONObject(i)
-                            addScheduleRow(cls.optString("time"), cls.optString("subject"), cls.optString("teacher"))
-                        }
+                val dayClasses = json?.optJSONArray(dayKeys[selectedWeekday]) ?: JSONArray()
+                if (dayClasses.length() == 0) {
+                    scheduleEmptyText.visibility = View.VISIBLE
+                } else {
+                    scheduleEmptyText.visibility = View.GONE
+                    for (i in 0 until dayClasses.length()) {
+                        val cls = dayClasses.getJSONObject(i)
+                        addScheduleRow(cls.optString("time"), cls.optString("subject"), cls.optString("teacher"))
                     }
                 }
-                scheduleEmptyText.visibility = if (totalClasses == 0) View.VISIBLE else View.GONE
             }
         }
     }
-
-    private fun addDayHeader(dayName: String, isToday: Boolean) {
-        val header = TextView(this).apply {
-            text = if (isToday) "📌 $dayName (امروز)" else "📅 $dayName"
-            textSize = 14f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(resources.getColor(R.color.primary_variant, null))
-            setPadding(0, dp(8), 0, dp(4))
-        }
-        scheduleListContainer.addView(header)
-    }
-
-    private fun addEmptyDayRow(text: String) {
-        val row = TextView(this).apply {
-            this.text = text
-            textSize = 12f
-            setTextColor(resources.getColor(R.color.text_secondary, null))
-            setPadding(dp(12), 0, 0, 0)
-        }
-        scheduleListContainer.addView(row)
-    }
-
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
 
     private fun addScheduleRow(time: String, subject: String, teacher: String) {
         val container = LinearLayout(this).apply {

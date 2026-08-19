@@ -82,31 +82,6 @@ class MainActivity : AppCompatActivity() {
         initViews()
         setupListeners()
         loadData()
-        checkAndShowCrashReport()
-    }
-
-    /**
-     * If a crash log exists from a previous run, show it so the user can report it.
-     */
-    private fun checkAndShowCrashReport() {
-        try {
-            val dir = File(getExternalFilesDir(null) ?: filesDir, "crashes")
-            val file = File(dir, "last_crash.txt")
-            if (file.exists()) {
-                val content = file.readText()
-                if (content.isNotBlank()) {
-                    file.delete()
-                    MaterialAlertDialogBuilder(this)
-                        .setTitle("گزارش خطا (کرش قبلی)")
-                        .setMessage(content)
-                        .setPositiveButton("متوجه شدم", null)
-                        .setCancelable(false)
-                        .show()
-                }
-            }
-        } catch (e: Exception) {
-            // ignore
-        }
     }
 
     private fun initViews() {
