@@ -107,28 +107,28 @@ class CrownsActivity : AppCompatActivity() {
     }
 
     private fun fetchGoldPrice(): String? {
-            return try {
-                val url = "https://www.iranjib.ir/showgroup/45/%D9%82%DB%8C%D9%85%D8%AA-%D8%AE%D9%88%D8%AF%D8%B1%D9%88-%D8%AA%D9%88%D9%84%DB%8C%D8%AF-%D8%AF%D8%A7%D8%AE%D9%84/"
-                val html = URL(url).readText()
-                // Generic pattern: look for "طارا" in table rows, capture numbers with commas
-                val regex = Regex("طارا[^<]*</td>\\s*<td[^>]*>([\\d,]+)</td>", RegexOption.IGNORE_CASE)
-                val match = regex.find(html)
-                if (match != null) {
-                    "قیمت طلا: ${match.groupValues[1].trim()} تومان"
+        return try {
+            val url = "https://www.iranjib.ir/showgroup/45/%D9%82%DB%8C%D9%85%D8%AA-%D8%AE%D9%88%D8%AF%D8%B1%D9%88-%D8%AA%D9%88%D9%84%DB%8C%D8%AF-%D8%AF%D8%A7%D8%AE%D9%84/"
+            val html = URL(url).readText()
+            // Look for تارا in table - generic pattern capturing number with commas
+            val regex = Regex("طارا[^<]*</td>\\s*<td[^>]*>([\\d,]+)</td>", RegexOption.IGNORE_CASE)
+            val match = regex.find(html)
+            if (match != null) {
+                "قیمت تارا: ${match.groupValues[1].trim()} تومان"
+            } else {
+                // Fallback: any number pattern near تارا
+                val altRegex = Regex("طارا[^<]*?([\\d,]{4,})", RegexOption.IGNORE_CASE)
+                val altMatch = altRegex.find(html)
+                if (altMatch != null) {
+                    "قیمت تارا: ${altMatch.groupValues[1].trim()} تومان"
                 } else {
-                    // Fallback: any price pattern near "طارا"
-                    val altRegex = Regex("طارا[^<]*?([\\d,]{4,})", RegexOption.IGNORE_CASE)
-                    val altMatch = altRegex.find(html)
-                    if (altMatch != null) {
-                        "قیمت طلا: ${altMatch.groupValues[1].trim()} تومان"
-                    } else {
-                        null
-                    }
+                    null
                 }
-            } catch (e: Exception) {
-                null
             }
+        } catch (e: Exception) {
+            null
         }
+    }
 
     // ---- Food Suggestion ----
     private fun loadFoodSuggestion() {
