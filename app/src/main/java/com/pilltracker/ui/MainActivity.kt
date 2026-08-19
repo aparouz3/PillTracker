@@ -6,6 +6,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.text.Editable
+import android.text.TextWatcher
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.ImageButton
@@ -448,10 +450,48 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * Formats the amount field with comma separators while typing (e.g. 1,500,000).
+     */
+    private fun attachAmountFormatting(input: TextInputEditText) {
+        input.addTextChangedListener(object : TextWatcher {
+            private var isFormatting = false
+
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
+            override fun afterTextChanged(s: Editable?) {
+                if (isFormatting) return
+                isFormatting = true
+                val digits = s.toString().replace(",", "").filter { it.isDigit() }
+                val formatted = formatWithCommas(digits)
+                if (formatted != s.toString()) {
+                    input.setText(formatted)
+                    input.setSelection(formatted.length)
+                }
+                isFormatting = false
+            }
+        })
+    }
+
+    private fun formatWithCommas(digits: String): String {
+        if (digits.isEmpty()) return ""
+        val sb = StringBuilder()
+        var count = 0
+        for (i in digits.length - 1 downTo 0) {
+            sb.append(digits[i])
+            count++
+            if (count % 3 == 0 && i > 0) sb.append(',')
+        }
+        return sb.reverse().toString()
+    }
+
     private fun showAddDialog(type: TransactionType) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_transaction, null)
         val titleInput = dialogView.findViewById<TextInputEditText>(R.id.titleInput)
         val amountInput = dialogView.findViewById<TextInputEditText>(R.id.amountInput)
+        attachAmountFormatting(amountInput)
         val folderDropdown = dialogView.findViewById<AutoCompleteTextView>(R.id.folderDropdown)
         val categoryDropdown = dialogView.findViewById<AutoCompleteTextView>(R.id.categoryDropdown)
 
@@ -514,7 +554,7 @@ class MainActivity : AppCompatActivity() {
 
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val title = titleInput.text?.toString()?.trim() ?: ""
-            val amountStr = amountInput.text?.toString()?.trim() ?: ""
+            val amountStr = amountInput.text?.toString()?.trim()?.replace(",", "") ?: ""
 
             if (title.isEmpty()) {
                 titleInput.error = "عنوان را وارد کنید"
@@ -556,7 +596,8 @@ class MainActivity : AppCompatActivity() {
         val incomeBtn = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.typeIncomeBtn)
 
         titleInput.setText(transaction.title)
-        amountInput.setText(transaction.amount.toString())
+        amountInput.setText(formatWithCommas(transaction.amount.toString()))
+        attachAmountFormatting(amountInput)
 
         // Load daily folders, preselect the transaction's current folder
         val folderNames = mutableListOf<String>()
@@ -650,7 +691,7 @@ class MainActivity : AppCompatActivity() {
 
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val title = titleInput.text?.toString()?.trim() ?: ""
-            val amountStr = amountInput.text?.toString()?.trim() ?: ""
+            val amountStr = amountInput.text?.toString()?.trim()?.replace(",", "") ?: ""
 
             if (title.isEmpty()) {
                 titleInput.error = "عنوان را وارد کنید"

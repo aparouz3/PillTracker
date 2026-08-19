@@ -30,6 +30,9 @@
             android:name=".ui.TopExpensesActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.PeriodExpensesActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.CategoriesActivity"
             android:exported="false" />
         <activity
