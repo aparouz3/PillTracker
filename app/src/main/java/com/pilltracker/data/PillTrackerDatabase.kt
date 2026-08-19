@@ -7,12 +7,13 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [Transaction::class, DailyNote::class, Category::class, Folder::class], version = 4, exportSchema = false)
+@Database(entities = [Transaction::class, DailyNote::class, Category::class, Folder::class, Food::class], version = 5, exportSchema = false)
 abstract class PillTrackerDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun noteDao(): NoteDao
     abstract fun categoryDao(): CategoryDao
     abstract fun folderDao(): FolderDao
+    abstract fun foodDao(): FoodDao
 
     companion object {
         @Volatile
@@ -57,6 +58,16 @@ abstract class PillTrackerDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS foods (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "name TEXT NOT NULL)"
+                )
+            }
+        }
+
         fun getDatabase(context: Context): PillTrackerDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -64,7 +75,7 @@ abstract class PillTrackerDatabase : RoomDatabase() {
                     PillTrackerDatabase::class.java,
                     "pilltracker_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                 INSTANCE = instance
                 instance

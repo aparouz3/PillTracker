@@ -888,6 +888,9 @@ class MainActivity : AppCompatActivity() {
                     h.editBtn.setOnClickListener { onEdit(tx) }
                     h.deleteBtn.setOnClickListener { onDelete(tx) }
                 }
+                is DayItem.Separator -> {
+                    // Separator is just a view, nothing to bind
+                }
             }
         }
     }
