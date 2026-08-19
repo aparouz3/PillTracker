@@ -107,28 +107,28 @@ class CrownsActivity : AppCompatActivity() {
     }
 
     private fun fetchGoldPrice(): String? {
-        return try {
-            val url = "https://www.iranjib.ir/showgroup/45/%D9%82%DB%8C%D9%85%D8%AA-%D8%AE%D9%88%D8%AF%D8%B1%D9%88-%D8%AA%D9%88%D9%84%DB%8C%D8%AF-%D8%AF%D8%A7%D8%AE%D9%84/"
-            val html = URL(url).readText()
-            // Look for "تارا" and "دستی" + "V1" / "نسخه 1" patterns
-            val regex = Regex("تارا[^<]*دستی[^<]*V1[^<]*</td>\\s*<td[^>]*>([^<]+)</td>", RegexOption.IGNORE_CASE)
-            val match = regex.find(html)
-            if (match != null) {
-                "تارا دستی V1: ${match.groupValues[1].trim()}"
-            } else {
-                // Fallback: try to find price near "تارا"
-                val altRegex = Regex("تارا[^<]*</td>\\s*<td[^>]*>([^<]+)</td>\\s*<td[^>]*>([^<]+)</td>", RegexOption.IGNORE_CASE)
-                val altMatch = altRegex.find(html)
-                if (altMatch != null) {
-                    "تارا: ${altMatch.groupValues[1].trim()} / ${altMatch.groupValues[2].trim()}"
+            return try {
+                val url = "https://www.iranjib.ir/showgroup/45/%D9%82%DB%8C%D9%85%D8%AA-%D8%AE%D9%88%D8%AF%D8%B1%D9%88-%D8%AA%D9%88%D9%84%DB%8C%D8%AF-%D8%AF%D8%A7%D8%AE%D9%84/"
+                val html = URL(url).readText()
+                // Generic pattern: look for "طارا" in table rows, capture numbers with commas
+                val regex = Regex("طارا[^<]*</td>\\s*<td[^>]*>([\\d,]+)</td>", RegexOption.IGNORE_CASE)
+                val match = regex.find(html)
+                if (match != null) {
+                    "قیمت طلا: ${match.groupValues[1].trim()} تومان"
                 } else {
-                    null
+                    // Fallback: any price pattern near "طارا"
+                    val altRegex = Regex("طارا[^<]*?([\\d,]{4,})", RegexOption.IGNORE_CASE)
+                    val altMatch = altRegex.find(html)
+                    if (altMatch != null) {
+                        "قیمت طلا: ${altMatch.groupValues[1].trim()} تومان"
+                    } else {
+                        null
+                    }
                 }
+            } catch (e: Exception) {
+                null
             }
-        } catch (e: Exception) {
-            null
         }
-    }
 
     // ---- Food Suggestion ----
     private fun loadFoodSuggestion() {
@@ -284,14 +284,15 @@ class CrownsActivity : AppCompatActivity() {
     }
 
     private fun getDayKey(dayOfWeek: Int): String {
+        // dayOfWeek is 0=Saturday ... 6=Friday from getPersianWeekDayIndex
         return when (dayOfWeek) {
-            1 -> "saturday"
-            2 -> "sunday"
-            3 -> "monday"
-            4 -> "tuesday"
-            5 -> "wednesday"
-            6 -> "thursday"
-            7 -> "friday"
+            0 -> "saturday"
+            1 -> "sunday"
+            2 -> "monday"
+            3 -> "tuesday"
+            4 -> "wednesday"
+            5 -> "thursday"
+            6 -> "friday"
             else -> "saturday"
         }
     }
