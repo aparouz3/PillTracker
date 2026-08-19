@@ -1,13 +1,13 @@
 package com.pilltracker
 
 import android.app.Application
-import android.os.Build
-import android.os.Environment
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.pilltracker.data.PillTrackerDatabase
+import com.pilltracker.work.CrownsNotifier
 import com.pilltracker.work.DailyBackupWorker
+import com.pilltracker.work.PriceUpdateScheduler
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -24,6 +24,9 @@ class PillTrackerApp : Application() {
         super.onCreate()
         installCrashHandler()
         scheduleDailyBackup()
+        CrownsNotifier.ensureChannel(this)
+        CrownsNotifier.scheduleDaily(this)
+        PriceUpdateScheduler.scheduleDaily(this)
     }
 
     /**

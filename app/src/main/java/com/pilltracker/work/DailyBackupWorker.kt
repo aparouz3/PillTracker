@@ -30,6 +30,9 @@ class DailyBackupWorker(
             val notes = db.noteDao().getAllNotesOnce()
             val categories = db.categoryDao().getAllCategoriesOnce()
             val folders = db.folderDao().getAllFoldersOnce()
+            val foods = db.foodDao().getAllFoodsOnce()
+            val schedule = db.scheduleDao().getAllOnce()
+            val priceHistory = db.priceHistoryDao().getAllOnce()
 
             val now = Calendar.getInstance()
             val today = PersianCalendar.gregorianToPersian(
@@ -38,9 +41,9 @@ class DailyBackupWorker(
             val filename = "pilltracker_backup_${today.year}_${today.month}_${today.day}.json"
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                saveViaMediaStore(filename, transactions, notes, categories, folders)
+                saveViaMediaStore(filename, transactions, notes, categories, folders, foods, schedule, priceHistory)
             } else {
-                saveViaLegacy(filename, transactions, notes, categories, folders)
+                saveViaLegacy(filename, transactions, notes, categories, folders, foods, schedule, priceHistory)
             }
             Result.success()
         } catch (e: Exception) {
@@ -53,7 +56,10 @@ class DailyBackupWorker(
         transactions: List<com.pilltracker.data.Transaction>,
         notes: List<com.pilltracker.data.DailyNote>,
         categories: List<com.pilltracker.data.Category>,
-        folders: List<com.pilltracker.data.Folder>
+        folders: List<com.pilltracker.data.Folder>,
+        foods: List<com.pilltracker.data.Food> = emptyList(),
+        schedule: List<com.pilltracker.data.ScheduleEntry> = emptyList(),
+        priceHistory: List<com.pilltracker.data.PriceHistory> = emptyList()
     ) {
         val resolver = applicationContext.contentResolver
         val folder = Environment.DIRECTORY_DOWNLOADS + "/PillTrackerBackups"
@@ -68,7 +74,7 @@ class DailyBackupWorker(
         }
         val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return
         resolver.openOutputStream(uri)?.use { out ->
-            BackupUtils.writeToStream(transactions, notes, categories, folders, out)
+            BackupUtils.writeToStream(transactions, notes, categories, folders, foods, schedule, priceHistory, out)
         }
     }
 
@@ -78,7 +84,10 @@ class DailyBackupWorker(
         transactions: List<com.pilltracker.data.Transaction>,
         notes: List<com.pilltracker.data.DailyNote>,
         categories: List<com.pilltracker.data.Category>,
-        folders: List<com.pilltracker.data.Folder>
+        folders: List<com.pilltracker.data.Folder>,
+        foods: List<com.pilltracker.data.Food> = emptyList(),
+        schedule: List<com.pilltracker.data.ScheduleEntry> = emptyList(),
+        priceHistory: List<com.pilltracker.data.PriceHistory> = emptyList()
     ) {
         val dir = File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
@@ -90,7 +99,7 @@ class DailyBackupWorker(
 
         val file = File(dir, filename)
         file.outputStream().use { out ->
-            BackupUtils.writeToStream(transactions, notes, categories, folders, out)
+            BackupUtils.writeToStream(transactions, notes, categories, folders, foods, schedule, priceHistory, out)
         }
     }
 }

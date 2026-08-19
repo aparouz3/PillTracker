@@ -7,8 +7,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.ImageButton
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -16,16 +16,19 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import com.pilltracker.PillTrackerApp
 import com.pilltracker.R
 import com.pilltracker.data.Food
+import com.pilltracker.data.PriceHistory
+import com.pilltracker.data.ScheduleEntry
 import com.pilltracker.util.PersianCalendar
+import com.pilltracker.work.CrownsNotifier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-import org.json.JSONObject
 import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -40,6 +43,7 @@ class CrownsActivity : AppCompatActivity() {
     private lateinit var goldProgress: ProgressBar
     private lateinit var goldPriceText: TextView
     private lateinit var goldUpdateTime: TextView
+    private lateinit var priceChart: LineChartView
 
     // Food views
     private lateinit var foodSuggestionText: TextView
@@ -49,6 +53,9 @@ class CrownsActivity : AppCompatActivity() {
     private lateinit var scheduleTodayLabel: TextView
     private lateinit var scheduleListContainer: ViewGroup
     private lateinit var scheduleEmptyText: TextView
+    private lateinit var editScheduleBtn: Button
+
+    private var dayOffset = 0 // 0 = today, -1 = yesterday, +1 = tomorrow
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +68,7 @@ class CrownsActivity : AppCompatActivity() {
         goldProgress = findViewById(R.id.goldProgress)
         goldPriceText = findViewById(R.id.goldPriceText)
         goldUpdateTime = findViewById(R.id.goldUpdateTime)
+        priceChart = findViewById(R.id.priceChart)
 
         foodSuggestionText = findViewById(R.id.foodSuggestionText)
         refreshFoodBtn = findViewById(R.id.refreshFoodBtn)
@@ -68,36 +76,64 @@ class CrownsActivity : AppCompatActivity() {
         scheduleTodayLabel = findViewById(R.id.scheduleTodayLabel)
         scheduleListContainer = findViewById(R.id.scheduleListContainer)
         scheduleEmptyText = findViewById(R.id.scheduleEmptyText)
+        editScheduleBtn = findViewById(R.id.editScheduleBtn)
+
+        // Seed default schedule from assets on first run (only if table is empty)
+        seedScheduleIfNeeded()
 
         // Load gold price
         loadGoldPrice()
 
-        // Load food suggestion
+        // Load food suggestion (same random food all day, changable via dice)
         loadFoodSuggestion()
-        refreshFoodBtn.setOnClickListener { loadFoodSuggestion() }
+        refreshFoodBtn.setOnClickListener { changeFoodSuggestion() }
         findViewById<View>(R.id.foodCard).setOnClickListener { showFoodListDialog() }
 
         // Load class schedule
         findViewById<View>(R.id.prevDayBtn).setOnClickListener { dayOffset--; loadSchedule() }
         findViewById<View>(R.id.nextDayBtn).setOnClickListener { dayOffset++; loadSchedule() }
+        editScheduleBtn.setOnClickListener { showEditScheduleDialog() }
         loadSchedule()
+
+        // Notification toggles
+        setupNotifSwitches()
     }
 
-    // ---- Gold Price ----
+    // ==================== Tara Price + Chart ====================
+
     private fun loadGoldPrice() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 withContext(Dispatchers.Main) { goldProgress.visibility = View.VISIBLE }
                 val price = fetchGoldPrice()
+                if (price != null) {
+                    // Store in history (one entry per day)
+                    val cal = Calendar.getInstance()
+                    val today = PersianCalendar.gregorianToPersian(
+                        cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)
+                    )
+                    val dateKey = "${today.year}-${today.month}-${today.day}"
+                    val existing = db.priceHistoryDao().getByDate(dateKey)
+                    if (existing == null) {
+                        db.priceHistoryDao().insert(PriceHistory(dateKey = dateKey, price = price))
+                    }
+                }
+                val history = db.priceHistoryDao().getRecent(30)
                 withContext(Dispatchers.Main) {
                     goldProgress.visibility = View.GONE
                     if (price != null) {
-                        goldPriceText.text = price
-                        val now = SimpleDateFormat("HH:mm - yyyy/MM/dd", Locale.US).format(Date())
+                        goldPriceText.text = "قیمت تارا: ${formatPrice(price)} تومان"
+                        val now = SimpleDateFormat("HH:mm", Locale.US).format(Date())
                         goldUpdateTime.text = "آخرین به‌روزرسانی: $now"
                     } else {
                         goldPriceText.text = "قیمت در دسترس نیست"
+                        // Still show chart from stored history
+                        val last = history.firstOrNull()
+                        if (last != null) {
+                            goldPriceText.text = "قیمت تارا: ${formatPrice(last.price)} تومان (آفلاین)"
+                        }
                     }
+                    priceChart.setData(history)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -108,7 +144,7 @@ class CrownsActivity : AppCompatActivity() {
         }
     }
 
-    private fun fetchGoldPrice(): String? {
+    private fun fetchGoldPrice(): Long? {
         return try {
             val url = "https://www.iranjib.ir/showgroup/45/%D9%82%DB%8C%D9%85%D8%AA-%D8%AE%D9%88%D8%AF%D8%B1%D9%88-%D8%AA%D9%88%D9%84%DB%8C%D8%AF-%D8%AF%D8%A7%D8%AE%D9%84/"
             val conn = URL(url).openConnection() as java.net.HttpURLConnection
@@ -125,32 +161,81 @@ class CrownsActivity : AppCompatActivity() {
                 ">تارا[^<]*</a></td>\\s*<td[^>]*>\\s*<span[^>]*class=\"lastprice\"[^>]*>([۰-۹0-9,]+)</span>"
             )
             val match = regex.find(html)
-            if (match != null) {
-                "قیمت تارا: ${toAsciiDigits(match.groupValues[1].trim())} تومان"
-            } else {
-                // Fallback: first lastprice span anywhere after the تارا name cell
+            val raw = match?.groupValues?.get(1) ?: run {
                 val altRegex = Regex(">تارا[^<]*</a></td>.*?class=\"lastprice\">([۰-۹0-9,]+)<", RegexOption.DOT_MATCHES_ALL)
-                val altMatch = altRegex.find(html)
-                if (altMatch != null) {
-                    "قیمت تارا: ${toAsciiDigits(altMatch.groupValues[1].trim())} تومان"
-                } else {
-                    null
-                }
+                altRegex.find(html)?.groupValues?.get(1)
             }
+            raw?.let { toAsciiDigits(it).replace(",", "").toLongOrNull() }
         } catch (e: Exception) {
             null
         }
+    }
+
+    private fun formatPrice(price: Long): String {
+        val s = price.toString()
+        val sb = StringBuilder()
+        var count = 0
+        for (i in s.length - 1 downTo 0) {
+            sb.append(s[i])
+            count++
+            if (count % 3 == 0 && i > 0) sb.append(',')
+        }
+        return sb.reverse().toString()
     }
 
     private fun toAsciiDigits(s: String): String = s
         .replace('۰', '0').replace('۱', '1').replace('۲', '2').replace('۳', '3').replace('۴', '4')
         .replace('۵', '5').replace('۶', '6').replace('۷', '7').replace('۸', '8').replace('۹', '9')
 
-    // ---- Food Suggestion ----
+    // ==================== Daily Food (locked per day) ====================
+
+    private fun todayKey(): String {
+        val cal = Calendar.getInstance()
+        val today = PersianCalendar.gregorianToPersian(
+            cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)
+        )
+        return "${today.year}-${today.month}-${today.day}"
+    }
+
     private fun loadFoodSuggestion() {
         lifecycleScope.launch {
+            val prefs = CrownsNotifier.prefs(this@CrownsActivity)
+            val today = todayKey()
+            val lockedDate = prefs.getString(CrownsNotifier.KEY_TODAY_FOOD_DATE, "")
+            if (lockedDate == today) {
+                val lockedName = prefs.getString(CrownsNotifier.KEY_TODAY_FOOD, "")
+                if (!lockedName.isNullOrBlank()) {
+                    foodSuggestionText.text = lockedName
+                    return@launch
+                }
+            }
+            // Pick a random food and lock it for today
             val food = db.foodDao().getRandomFoodOnce()
-            foodSuggestionText.text = food?.name ?: "لیست غذاها خالیه — روی کارت بزن تا اضافه کنی"
+            if (food != null) {
+                prefs.edit()
+                    .putString(CrownsNotifier.KEY_TODAY_FOOD_DATE, today)
+                    .putString(CrownsNotifier.KEY_TODAY_FOOD, food.name)
+                    .apply()
+                foodSuggestionText.text = food.name
+            } else {
+                foodSuggestionText.text = "لیست غذاها خالیه — روی کارت بزن تا اضافه کنی"
+            }
+        }
+    }
+
+    private fun changeFoodSuggestion() {
+        lifecycleScope.launch {
+            val food = db.foodDao().getRandomFoodOnce()
+            if (food != null) {
+                val prefs = CrownsNotifier.prefs(this@CrownsActivity)
+                prefs.edit()
+                    .putString(CrownsNotifier.KEY_TODAY_FOOD_DATE, todayKey())
+                    .putString(CrownsNotifier.KEY_TODAY_FOOD, food.name)
+                    .apply()
+                foodSuggestionText.text = food.name
+            } else {
+                foodSuggestionText.text = "لیست غذاها خالیه — روی کارت بزن تا اضافه کنی"
+            }
         }
     }
 
@@ -183,7 +268,6 @@ class CrownsActivity : AppCompatActivity() {
         }
         recyclerView.adapter = adapter
 
-        // Load initial list
         lifecycleScope.launch {
             val foods = db.foodDao().getAllFoodsOnce()
             adapter.updateList(foods)
@@ -227,27 +311,68 @@ class CrownsActivity : AppCompatActivity() {
         }
     }
 
-    // ---- Class Schedule ----
-    private var dayOffset = 0 // 0 = today, -1 = yesterday, +1 = tomorrow
+    // ==================== Class Schedule (from DB) ====================
+
+    private fun seedScheduleIfNeeded() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val existing = db.scheduleDao().getAllOnce()
+            if (existing.isNotEmpty()) return@launch
+            try {
+                val inputStream = assets.open("weekly_schedule.json")
+                val jsonStr = inputStream.bufferedReader().use { it.readText() }
+                val arr = JSONArray(jsonStr)
+                val entries = mutableListOf<ScheduleEntry>()
+                for (i in 0 until arr.length()) {
+                    val day = arr.getJSONObject(i)
+                    val dayKey = dayNameToKey(day.optString("day")) ?: continue
+                    val classes = day.optJSONArray("classes") ?: continue
+                    for (j in 0 until classes.length()) {
+                        val cls = classes.getJSONObject(j)
+                        entries.add(
+                            ScheduleEntry(
+                                dayKey = dayKey,
+                                time = cls.optString("time"),
+                                subject = cls.optString("subject"),
+                                teacher = cls.optString("teacher")
+                            )
+                        )
+                    }
+                }
+                db.scheduleDao().insertAll(entries)
+            } catch (e: Exception) {
+                // ignore — user can edit schedule manually
+            }
+        }
+    }
+
+    private fun dayNameToKey(name: String): String? = when (name) {
+        "شنبه" -> "saturday"
+        "یکشنبه" -> "sunday"
+        "دوشنبه" -> "monday"
+        "سه‌شنبه", "سه شنبه" -> "tuesday"
+        "چهارشنبه" -> "wednesday"
+        "پنج‌شنبه", "پنج شنبه" -> "thursday"
+        "جمعه" -> "friday"
+        else -> null
+    }
 
     private fun loadSchedule() {
         lifecycleScope.launch {
             val cal = Calendar.getInstance()
             val today = PersianCalendar.gregorianToPersian(
-                cal.get(Calendar.YEAR),
-                cal.get(Calendar.MONTH) + 1,
-                cal.get(Calendar.DAY_OF_MONTH)
+                cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH)
             )
             // 0=Saturday ... 6=Friday
             val todayWeekday = PersianCalendar.getPersianWeekDayIndex(today.year, today.month, today.day)
-
-            // Selected day: today + offset; weekday cycles within the week
             val selectedWeekday = ((todayWeekday + dayOffset) % 7 + 7) % 7
             val selectedDate = PersianCalendar.addDays(today.year, today.month, today.day, dayOffset)
             val dayName = PersianCalendar.getPersianWeekDayNameForDate(selectedDate.year, selectedDate.month, selectedDate.day)
 
-            // Read schedule JSON from assets
-            val json = readScheduleJson()
+            val dayKeys = arrayOf(
+                "saturday", "sunday", "monday", "tuesday",
+                "wednesday", "thursday", "friday"
+            )
+            val classes = db.scheduleDao().getByDay(dayKeys[selectedWeekday])
 
             withContext(Dispatchers.Main) {
                 scheduleTodayLabel.text = if (dayOffset == 0) {
@@ -257,18 +382,12 @@ class CrownsActivity : AppCompatActivity() {
                 }
 
                 scheduleListContainer.removeAllViews()
-                val dayKeys = arrayOf(
-                    "saturday", "sunday", "monday", "tuesday",
-                    "wednesday", "thursday", "friday"
-                )
-                val dayClasses = json?.optJSONArray(dayKeys[selectedWeekday]) ?: JSONArray()
-                if (dayClasses.length() == 0) {
+                if (classes.isEmpty()) {
                     scheduleEmptyText.visibility = View.VISIBLE
                 } else {
                     scheduleEmptyText.visibility = View.GONE
-                    for (i in 0 until dayClasses.length()) {
-                        val cls = dayClasses.getJSONObject(i)
-                        addScheduleRow(cls.optString("time"), cls.optString("subject"), cls.optString("teacher"))
+                    for (cls in classes) {
+                        addScheduleRow(cls.time, cls.subject, cls.teacher)
                     }
                 }
             }
@@ -310,30 +429,115 @@ class CrownsActivity : AppCompatActivity() {
         scheduleListContainer.addView(container)
     }
 
-    private fun readScheduleJson(): JSONObject? {
-        return try {
-            val inputStream = assets.open("weekly_schedule.json")
-            val jsonStr = inputStream.bufferedReader().use { it.readText() }
-            // The JSON is an array; convert to object keyed by day name
-            val arr = JSONArray(jsonStr)
-            val obj = JSONObject()
-            for (i in 0 until arr.length()) {
-                val day = arr.getJSONObject(i)
-                val key = when (day.optString("day")) {
-                    "شنبه" -> "saturday"
-                    "یکشنبه" -> "sunday"
-                    "دوشنبه" -> "monday"
-                    "سه‌شنبه", "سه شنبه" -> "tuesday"
-                    "چهارشنبه" -> "wednesday"
-                    "پنج‌شنبه", "پنج شنبه" -> "thursday"
-                    "جمعه" -> "friday"
-                    else -> continue
+    private fun showEditScheduleDialog() {
+        val dayKeys = arrayOf(
+            "saturday", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday"
+        )
+        val dayNames = arrayOf(
+            "شنبه", "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنج‌شنبه", "جمعه"
+        )
+        val selected = intArrayOf(0)
+
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_edit_schedule, null)
+        val daySpinner = dialogView.findViewById<TextView>(R.id.scheduleDayName)
+        val timeInput = dialogView.findViewById<EditText>(R.id.scheduleTimeInput)
+        val subjectInput = dialogView.findViewById<EditText>(R.id.scheduleSubjectInput)
+        val teacherInput = dialogView.findViewById<EditText>(R.id.scheduleTeacherInput)
+        val classesContainer = dialogView.findViewById<LinearLayout>(R.id.scheduleClassesContainer)
+
+        fun refreshDay() {
+            daySpinner.text = dayNames[selected[0]]
+            lifecycleScope.launch {
+                val classes = db.scheduleDao().getByDay(dayKeys[selected[0]])
+                classesContainer.removeAllViews()
+                for (cls in classes) {
+                    val row = LinearLayout(this@CrownsActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = android.view.Gravity.CENTER_VERTICAL
+                        setPadding(0, 4, 0, 4)
+                    }
+                    val info = TextView(this@CrownsActivity).apply {
+                        text = "${cls.time} — ${cls.subject}" +
+                            (if (cls.teacher.isNotEmpty()) " (${cls.teacher})" else "")
+                        textSize = 13f
+                        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    }
+                    val deleteBtn = ImageButton(this@CrownsActivity).apply {
+                        setImageResource(android.R.drawable.ic_menu_delete)
+                        background = null
+                        setOnClickListener {
+                            lifecycleScope.launch {
+                                db.scheduleDao().deleteById(cls.id)
+                                refreshDay()
+                            }
+                        }
+                    }
+                    row.addView(info)
+                    row.addView(deleteBtn)
+                    classesContainer.addView(row)
                 }
-                obj.put(key, day.optJSONArray("classes") ?: JSONArray())
             }
-            obj
-        } catch (e: Exception) {
-            null
+        }
+
+        // Use the dialog's own day navigation
+        val prevBtn = dialogView.findViewById<ImageButton>(R.id.schedulePrevDay)
+        val nextBtn = dialogView.findViewById<ImageButton>(R.id.scheduleNextDay)
+        prevBtn.setOnClickListener {
+            selected[0] = (selected[0] + 6) % 7
+            refreshDay()
+        }
+        nextBtn.setOnClickListener {
+            selected[0] = (selected[0] + 1) % 7
+            refreshDay()
+        }
+
+        refreshDay()
+
+        AlertDialog.Builder(this)
+            .setTitle("✏️ تغییر برنامه کلاسی")
+            .setView(dialogView)
+            .setPositiveButton("افزودن کلاس") { _, _ ->
+                val time = timeInput.text?.toString()?.trim().orEmpty()
+                val subject = subjectInput.text?.toString()?.trim().orEmpty()
+                if (subject.isNotEmpty()) {
+                    lifecycleScope.launch {
+                        db.scheduleDao().insert(
+                            ScheduleEntry(
+                                dayKey = dayKeys[selected[0]],
+                                time = time,
+                                subject = subject,
+                                teacher = teacherInput.text?.toString()?.trim().orEmpty()
+                            )
+                        )
+                    }
+                }
+            }
+            .setNegativeButton("بستن", null)
+            .show()
+    }
+
+    // ==================== Notification Toggles ====================
+
+    private fun setupNotifSwitches() {
+        val prefs = CrownsNotifier.prefs(this)
+
+        findViewById<SwitchMaterial>(R.id.foodNotifSwitch).apply {
+            isChecked = prefs.getBoolean(CrownsNotifier.KEY_FOOD, true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean(CrownsNotifier.KEY_FOOD, checked).apply()
+            }
+        }
+        findViewById<SwitchMaterial>(R.id.priceNotifSwitch).apply {
+            isChecked = prefs.getBoolean(CrownsNotifier.KEY_PRICE, true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean(CrownsNotifier.KEY_PRICE, checked).apply()
+            }
+        }
+        findViewById<SwitchMaterial>(R.id.scheduleNotifSwitch).apply {
+            isChecked = prefs.getBoolean(CrownsNotifier.KEY_SCHEDULE, true)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean(CrownsNotifier.KEY_SCHEDULE, checked).apply()
+            }
         }
     }
 }

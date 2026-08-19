@@ -1,7 +1,10 @@
 package com.pilltracker.ui
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -84,6 +87,15 @@ class MainActivity : AppCompatActivity() {
         initViews()
         setupListeners()
         loadData()
+        requestNotificationPermission()
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
+            }
+        }
     }
 
     private fun initViews() {
@@ -183,10 +195,13 @@ class MainActivity : AppCompatActivity() {
                 val notes = db.noteDao().getAllNotesOnce()
                 val categories = db.categoryDao().getAllCategoriesOnce()
                 val folders = db.folderDao().getAllFoldersOnce()
+                val foods = db.foodDao().getAllFoodsOnce()
+                val schedule = db.scheduleDao().getAllOnce()
+                val priceHistory = db.priceHistoryDao().getAllOnce()
                 contentResolver.openOutputStream(uri)?.use { out ->
-                    BackupUtils.writeToStream(all, notes, categories, folders, out)
+                    BackupUtils.writeToStream(all, notes, categories, folders, foods, schedule, priceHistory, out)
                 }
-                Toast.makeText(this@MainActivity, "بکاپ ذخیره شد (${all.size} تراکنش، ${notes.size} یادداشت، ${categories.size} کتگوری، ${folders.size} پوشه)", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, "بکاپ ذخیره شد (${all.size} تراکنش، ${notes.size} یادداشت، ${categories.size} کتگوری، ${folders.size} پوشه، ${foods.size} غذا، ${schedule.size} کلاس، ${priceHistory.size} قیمت)", Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, "خطا در بکاپ: ${e.message}", Toast.LENGTH_LONG).show()
             }
@@ -209,7 +224,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 MaterialAlertDialogBuilder(this@MainActivity)
                     .setTitle("بازیابی داده")
-                    .setMessage("${data.transactions.size} تراکنش، ${data.notes.size} یادداشت، ${data.categories.size} کتگوری و ${data.folders.size} پوشه در فایل پیدا شد. داده فعلی با این داده جایگزین می‌شود. ادامه می‌دهید؟")
+                    .setMessage("${data.transactions.size} تراکنش، ${data.notes.size} یادداشت، ${data.categories.size} کتگوری، ${data.folders.size} پوشه، ${data.foods.size} غذا، ${data.schedule.size} کلاس و ${data.priceHistory.size} قیمت در فایل پیدا شد. داده فعلی با این داده جایگزین می‌شود. ادامه می‌دهید؟")
                     .setPositiveButton("بله") { _, _ ->
                         lifecycleScope.launch {
                             db.transactionDao().deleteAll()
@@ -220,7 +235,13 @@ class MainActivity : AppCompatActivity() {
                             db.categoryDao().insertAll(data.categories)
                             db.folderDao().deleteAll()
                             db.folderDao().insertAll(data.folders)
-                            Toast.makeText(this@MainActivity, "بازیابی انجام شد (${data.transactions.size} تراکنش، ${data.notes.size} یادداشت، ${data.categories.size} کتگوری، ${data.folders.size} پوشه)", Toast.LENGTH_LONG).show()
+                            db.foodDao().getAllFoodsOnce().forEach { db.foodDao().delete(it.id) }
+                            db.foodDao().insertAll(data.foods)
+                            db.scheduleDao().deleteAll()
+                            db.scheduleDao().insertAll(data.schedule)
+                            db.priceHistoryDao().deleteAll()
+                            db.priceHistoryDao().insertAll(data.priceHistory)
+                            Toast.makeText(this@MainActivity, "بازیابی انجام شد (${data.transactions.size} تراکنش، ${data.notes.size} یادداشت، ${data.categories.size} کتگوری، ${data.folders.size} پوشه، ${data.foods.size} غذا، ${data.schedule.size} کلاس، ${data.priceHistory.size} قیمت)", Toast.LENGTH_LONG).show()
                             loadData()
                             loadNote()
                         }

@@ -7,13 +7,15 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [Transaction::class, DailyNote::class, Category::class, Folder::class, Food::class], version = 5, exportSchema = false)
+@Database(entities = [Transaction::class, DailyNote::class, Category::class, Folder::class, Food::class, PriceHistory::class, ScheduleEntry::class], version = 6, exportSchema = false)
 abstract class PillTrackerDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun noteDao(): NoteDao
     abstract fun categoryDao(): CategoryDao
     abstract fun folderDao(): FolderDao
     abstract fun foodDao(): FoodDao
+    abstract fun priceHistoryDao(): PriceHistoryDao
+    abstract fun scheduleDao(): ScheduleDao
 
     companion object {
         @Volatile
@@ -68,6 +70,26 @@ abstract class PillTrackerDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS price_history (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "dateKey TEXT NOT NULL, " +
+                        "price INTEGER NOT NULL, " +
+                        "timestamp INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS schedule_entries (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "dayKey TEXT NOT NULL, " +
+                        "time TEXT NOT NULL, " +
+                        "subject TEXT NOT NULL, " +
+                        "teacher TEXT NOT NULL)"
+                )
+            }
+        }
+
         fun getDatabase(context: Context): PillTrackerDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -75,7 +97,7 @@ abstract class PillTrackerDatabase : RoomDatabase() {
                     PillTrackerDatabase::class.java,
                     "pilltracker_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                 INSTANCE = instance
                 instance
