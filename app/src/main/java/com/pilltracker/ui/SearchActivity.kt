@@ -63,6 +63,7 @@ class SearchActivity : AppCompatActivity() {
         if (query.isEmpty()) {
             results.clear()
             recyclerView.adapter?.notifyDataSetChanged()
+            recyclerView.visibility = View.GONE
             emptyText.visibility = View.VISIBLE
             emptyText.text = "عبارت جستجو را وارد کنید"
             return
@@ -71,6 +72,7 @@ class SearchActivity : AppCompatActivity() {
             results.clear()
             results.addAll(db.transactionDao().searchOnce("%$query%"))
             recyclerView.adapter?.notifyDataSetChanged()
+            recyclerView.visibility = if (results.isEmpty()) View.GONE else View.VISIBLE
             emptyText.visibility = if (results.isEmpty()) View.VISIBLE else View.GONE
             if (results.isEmpty()) emptyText.text = "نتیجه‌ای پیدا نشد"
         }

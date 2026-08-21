@@ -76,7 +76,6 @@
         android:layout_marginBottom="8dp"
         android:hint="پوشه روز (اختیاری)"
         app:boxStrokeColor="@color/primary"
-        app:endIconMode="clear_text"
         app:hintTextColor="@color/primary">
 
         <AutoCompleteTextView
@@ -94,7 +93,6 @@
         android:layout_height="wrap_content"
         android:hint="کتگوری (اختیاری)"
         app:boxStrokeColor="@color/primary"
-        app:endIconMode="clear_text"
         app:hintTextColor="@color/primary">
 
         <AutoCompleteTextView

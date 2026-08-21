@@ -107,8 +107,46 @@ class MainActivity : AppCompatActivity() {
     private fun checkPinLock() {
         val pin = pinPrefs.getString("pin", "")
         if (pin.isNullOrEmpty()) return
-        // Show a full-screen non-cancelable lock dialog before the main UI is usable
-        showPinLockDialog(pin)
+        // Show lock: biometric first if available, else PIN dialog
+        showBiometricOrPinLock(pin)
+    }
+
+    private fun showBiometricOrPinLock(expectedPin: String) {
+        val biometricManager = androidx.biometric.BiometricManager.from(this)
+        val canAuth = biometricManager.canAuthenticate(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK)
+        if (canAuth == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS) {
+            val prompt = androidx.biometric.BiometricPrompt(
+                this,
+                ContextCompat.getMainExecutor(this),
+                object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                        // unlocked via fingerprint — nothing to do
+                    }
+
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        // Negative button ("ورود با پین") or cancel/failure — fall back to PIN dialog
+                        showPinLockDialog(expectedPin)
+                    }
+
+                    override fun onAuthenticationFailed() {
+                        // let the prompt retry
+                    }
+                }
+            )
+            val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                .setTitle("قفل برنامه")
+                .setSubtitle("اثر انگشت را لمس کنید")
+                .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK)
+                .setNegativeButtonText("ورود با پین")
+                .build()
+            try {
+                prompt.authenticate(promptInfo)
+            } catch (e: Exception) {
+                showPinLockDialog(expectedPin)
+            }
+        } else {
+            showPinLockDialog(expectedPin)
+        }
     }
 
     private fun showPinLockDialog(expectedPin: String) {
@@ -778,13 +816,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Load daily folders (for the selected day) into the dropdown
-        val folderNames = mutableListOf<String>()
-        val folderIds = mutableListOf<Long>()
+        val folderNames = mutableListOf<String>("— بدون پوشه —")
+        val folderIds = mutableListOf<Long?>(null)
         var selectedFolderId: Long? = preselectedFolder?.id
         lifecycleScope.launch {
             val folders = db.folderDao().getFoldersForDateOnce(currentYear, currentMonth, currentDay)
-            folderNames.clear()
-            folderIds.clear()
             var preselectedName = ""
             for (f in folders) {
                 folderNames.add(f.name)
@@ -803,23 +839,13 @@ class MainActivity : AppCompatActivity() {
         folderDropdown.setOnItemClickListener { _, _, position, _ ->
             selectedFolderId = folderIds[position]
         }
-        // When the user clears the dropdown text (X button), reset the selection
-        folderDropdown.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                if (s.isNullOrEmpty()) selectedFolderId = null
-            }
-        })
 
-        // Load categories into the dropdown
-        val categoryNames = mutableListOf<String>()
-        val categoryIds = mutableListOf<Long>()
+        // Load categories into the dropdown (first item = no category)
+        val categoryNames = mutableListOf<String>("— بدون کتگوری —")
+        val categoryIds = mutableListOf<Long?>(null)
         var selectedCategoryId: Long? = null
         lifecycleScope.launch {
             val cats = db.categoryDao().getAllCategoriesOnce()
-            categoryNames.clear()
-            categoryIds.clear()
             for (c in cats) {
                 categoryNames.add(c.name)
                 categoryIds.add(c.id)
@@ -836,14 +862,6 @@ class MainActivity : AppCompatActivity() {
         categoryDropdown.setOnItemClickListener { _, _, position, _ ->
             selectedCategoryId = categoryIds[position]
         }
-        // When the user clears the category dropdown text (X button), reset the selection
-        categoryDropdown.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                if (s.isNullOrEmpty()) selectedCategoryId = null
-            }
-        })
 
         val dialog = MaterialAlertDialogBuilder(this)
             .setTitle(if (type == TransactionType.EXPENSE) "افزودن هزینه" else "افزودن درآمد")
@@ -920,13 +938,11 @@ class MainActivity : AppCompatActivity() {
         attachAmountFormatting(amountInput)
 
         // Load daily folders, preselect the transaction's current folder
-        val folderNames = mutableListOf<String>()
-        val folderIds = mutableListOf<Long>()
+        val folderNames = mutableListOf<String>("— بدون پوشه —")
+        val folderIds = mutableListOf<Long?>(null)
         var selectedFolderId: Long? = transaction.folderId
         lifecycleScope.launch {
             val folders = db.folderDao().getFoldersForDateOnce(currentYear, currentMonth, currentDay)
-            folderNames.clear()
-            folderIds.clear()
             var selectedName = ""
             for (f in folders) {
                 folderNames.add(f.name)
@@ -947,13 +963,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Load categories, preselect the transaction's current folder
-        val categoryNames = mutableListOf<String>()
-        val categoryIds = mutableListOf<Long>()
+        val categoryNames = mutableListOf<String>("— بدون کتگوری —")
+        val categoryIds = mutableListOf<Long?>(null)
         var selectedCategoryId: Long? = transaction.categoryId
         lifecycleScope.launch {
             val cats = db.categoryDao().getAllCategoriesOnce()
-            categoryNames.clear()
-            categoryIds.clear()
             var selectedName = ""
             for (c in cats) {
                 categoryNames.add(c.name)

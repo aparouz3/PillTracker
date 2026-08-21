@@ -37,12 +37,14 @@
         android:background="@drawable/input_bg"
         android:drawableStart="@android:drawable/ic_menu_search"
         android:drawablePadding="8dp"
+        android:drawableTint="@color/text_secondary"
         android:hint="عنوان یا کتگوری..."
         android:inputType="text"
         android:maxLines="1"
         android:padding="12dp"
         android:textColor="@color/on_surface"
-        android:textColorHint="@color/text_secondary" />
+        android:textColorHint="@color/text_secondary"
+        android:textCursorDrawable="@null" />
 
     <TextView
         android:id="@+id/searchEmptyText"
