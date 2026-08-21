@@ -50,6 +50,7 @@ object PriceUpdateScheduler {
 class PriceUpdateReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != PriceUpdateScheduler.ACTION) return
+        val result = goAsync()
         val app = context.applicationContext as PillTrackerApp
         val db = app.database
         CoroutineScope(Dispatchers.IO).launch {
@@ -67,6 +68,8 @@ class PriceUpdateReceiver : BroadcastReceiver() {
                 }
             } catch (e: Exception) {
                 // silent
+            } finally {
+                result.finish()
             }
         }
     }

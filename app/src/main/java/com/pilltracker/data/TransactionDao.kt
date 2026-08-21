@@ -23,6 +23,9 @@ interface TransactionDao {
     @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = :type AND year = :year AND month = :month AND day = :day")
     fun getDailyTotal(type: TransactionType, year: Int, month: Int, day: Int): Flow<Long>
 
+    @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = :type AND year = :year AND month = :month AND day = :day")
+    suspend fun getDailyTotalOnce(type: TransactionType, year: Int, month: Int, day: Int): Long
+
     @Query("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type = :type AND year = :year AND month = :month")
     fun getMonthlyTotal(type: TransactionType, year: Int, month: Int): Flow<Long>
 
@@ -101,6 +104,12 @@ interface TransactionDao {
 
     @Delete
     suspend fun delete(transaction: Transaction)
+
+    @Query("SELECT * FROM transactions WHERE id = :id")
+    suspend fun getById(id: Long): Transaction?
+
+    @Query("SELECT * FROM transactions WHERE title LIKE :q OR category_id IN (SELECT id FROM categories WHERE name LIKE :q) ORDER BY timestamp DESC LIMIT 100")
+    suspend fun searchOnce(q: String): List<Transaction>
 
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun deleteById(id: Long)

@@ -94,6 +94,164 @@ class MainActivity : AppCompatActivity() {
         loadData()
         requestNotificationPermission()
         checkTomorrowNoteNotification()
+        checkPinLock()
+    }
+
+    // ---- App lock (PIN) ----
+
+    private val pinPrefs: android.content.SharedPreferences
+        get() = getSharedPreferences("app_lock", Context.MODE_PRIVATE)
+
+    private fun isPinSet(): Boolean = pinPrefs.getString("pin", "").isNullOrEmpty().not()
+
+    private fun checkPinLock() {
+        val pin = pinPrefs.getString("pin", "")
+        if (pin.isNullOrEmpty()) return
+        // Show a full-screen non-cancelable lock dialog before the main UI is usable
+        showPinLockDialog(pin)
+    }
+
+    private fun showPinLockDialog(expectedPin: String) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_pin_input, null)
+        val pinInput = dialogView.findViewById<TextInputEditText>(R.id.pinInput)
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("🔒 قفل برنامه")
+            .setView(dialogView)
+            .setCancelable(false)
+            .setPositiveButton("ورود") { _, _ ->
+                val entered = pinInput.text?.toString()?.trim().orEmpty()
+                if (entered == expectedPin) {
+                    // unlocked — dismiss
+                } else {
+                    pinInput.error = "پین اشتباه است"
+                    showPinLockDialog(expectedPin)
+                }
+            }
+            .show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val entered = pinInput.text?.toString()?.trim().orEmpty()
+            if (entered == expectedPin) {
+                dialog.dismiss()
+            } else {
+                pinInput.error = "پین اشتباه است"
+            }
+        }
+    }
+
+    private fun showPinSetupDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_pin_input, null)
+        val pinInput = dialogView.findViewById<TextInputEditText>(R.id.pinInput)
+        val existingPin = pinPrefs.getString("pin", "")
+        val isSet = !existingPin.isNullOrEmpty()
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(if (isSet) "تغییر پین قفل" else "تنظیم پین قفل")
+            .setMessage(if (isSet) "پین فعلی را وارد کنید" else "یک پین ۴ رقمی وارد کنید")
+            .setView(dialogView)
+            .setPositiveButton(if (isSet) "تأیید" else "فعال‌سازی") { _, _ ->
+                val entered = pinInput.text?.toString()?.trim().orEmpty()
+                if (isSet) {
+                    if (entered == existingPin) {
+                        showNewPinDialog()
+                    } else {
+                        Toast.makeText(this, "پین فعلی اشتباه است", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    if (entered.length >= 4) {
+                        pinPrefs.edit().putString("pin", entered).apply()
+                        Toast.makeText(this, "قفل فعال شد", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this, "پین باید حداقل ۴ رقم باشد", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNeutralButton(if (isSet) "غیرفعال‌سازی" else null) { _, _ ->
+                if (isSet) {
+                    pinPrefs.edit().remove("pin").apply()
+                    Toast.makeText(this, "قفل غیرفعال شد", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("انصراف", null)
+            .show()
+    }
+
+    private fun showNewPinDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_pin_input, null)
+        val pinInput = dialogView.findViewById<TextInputEditText>(R.id.pinInput)
+        MaterialAlertDialogBuilder(this)
+            .setTitle("پین جدید")
+            .setMessage("یک پین جدید وارد کنید")
+            .setView(dialogView)
+            .setPositiveButton("ذخیره") { _, _ ->
+                val entered = pinInput.text?.toString()?.trim().orEmpty()
+                if (entered.length >= 4) {
+                    pinPrefs.edit().putString("pin", entered).apply()
+                    Toast.makeText(this, "پین تغییر کرد", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "پین باید حداقل ۴ رقم باشد", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("انصراف", null)
+            .show()
+    }
+
+    // ---- Search ----
+
+    private val searchLauncher = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+        .let { registerForActivityResult(it) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val data = result.data
+                if (data != null && data.hasExtra("year")) {
+                    currentYear = data.getIntExtra("year", currentYear)
+                    currentMonth = data.getIntExtra("month", currentMonth)
+                    currentDay = data.getIntExtra("day", currentDay)
+                    loadData()
+                }
+            }
+        } }
+
+    // ---- CSV / Excel export ----
+
+    private val csvLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri != null) writeExport(uri, "csv")
+    }
+
+    private val xlsLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/vnd.ms-excel")) { uri ->
+        if (uri != null) writeExport(uri, "xls")
+    }
+
+    private fun exportCsv() {
+        val now = Calendar.getInstance()
+        val today = PersianCalendar.gregorianToPersian(
+            now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1, now.get(Calendar.DAY_OF_MONTH)
+        )
+        csvLauncher.launch("pilltracker_${today.year}_${today.month}_${today.day}.csv")
+    }
+
+    private fun exportXls() {
+        val now = Calendar.getInstance()
+        val today = PersianCalendar.gregorianToPersian(
+            now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1, now.get(Calendar.DAY_OF_MONTH)
+        )
+        xlsLauncher.launch("pilltracker_${today.year}_${today.month}_${today.day}.xls")
+    }
+
+    private fun writeExport(uri: Uri, format: String) {
+        lifecycleScope.launch {
+            try {
+                val all = db.transactionDao().getAllTransactionsOnce()
+                val categories = db.categoryDao().getAllCategoriesOnce()
+                val bytes = if (format == "csv") {
+                    com.pilltracker.util.CsvExportHelper.buildCsv(all, categories)
+                } else {
+                    com.pilltracker.util.CsvExportHelper.buildXls(all, categories)
+                }
+                contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                Toast.makeText(this@MainActivity, "خروجی ذخیره شد (${all.size} تراکنش)", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "خطا در ذخیره: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     /**
@@ -172,6 +330,7 @@ class MainActivity : AppCompatActivity() {
             onDelete = { transaction -> showDeleteDialog(transaction) },
             onEdit = { transaction -> showEditDialog(transaction) },
             onDeleteFolder = { folder -> showDeleteFolderDialog(folder) },
+            onFolderClick = { folder -> showAddDialogToFolder(folder) },
             categoryNames = { categoryNameMap }
         )
         // Load category names for display in the list
@@ -204,6 +363,26 @@ class MainActivity : AppCompatActivity() {
                 R.id.navCrowns -> {
                     drawerLayout.closeDrawers()
                     startActivity(Intent(this, CrownsActivity::class.java))
+                }
+                R.id.navRecurring -> {
+                    drawerLayout.closeDrawers()
+                    startActivity(Intent(this, RecurringActivity::class.java))
+                }
+                R.id.navSearch -> {
+                    drawerLayout.closeDrawers()
+                    searchLauncher.launch(Intent(this, SearchActivity::class.java))
+                }
+                R.id.navExportCsv -> {
+                    drawerLayout.closeDrawers()
+                    exportCsv()
+                }
+                R.id.navExportXls -> {
+                    drawerLayout.closeDrawers()
+                    exportXls()
+                }
+                R.id.navPinLock -> {
+                    drawerLayout.closeDrawers()
+                    showPinSetupDialog()
                 }
                 R.id.navBackup -> {
                     drawerLayout.closeDrawers()
@@ -251,10 +430,11 @@ class MainActivity : AppCompatActivity() {
                 val foods = db.foodDao().getAllFoodsOnce()
                 val schedule = db.scheduleDao().getAllOnce()
                 val priceHistory = db.priceHistoryDao().getAllOnce()
+                val recurring = db.recurringDao().getAll()
                 contentResolver.openOutputStream(uri)?.use { out ->
-                    BackupUtils.writeToStream(all, notes, categories, folders, foods, schedule, priceHistory, out)
+                    BackupUtils.writeToStream(all, notes, categories, folders, foods, schedule, priceHistory, recurring, out)
                 }
-                Toast.makeText(this@MainActivity, "بکاپ ذخیره شد (${all.size} تراکنش، ${notes.size} یادداشت، ${categories.size} کتگوری، ${folders.size} پوشه، ${foods.size} غذا، ${schedule.size} کلاس، ${priceHistory.size} قیمت)", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, "بکاپ ذخیره شد (${all.size} تراکنش، ${notes.size} یادداشت، ${categories.size} کتگوری، ${folders.size} پوشه، ${foods.size} غذا، ${schedule.size} کلاس، ${priceHistory.size} قیمت، ${recurring.size} تکراری)", Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
                 Toast.makeText(this@MainActivity, "خطا در بکاپ: ${e.message}", Toast.LENGTH_LONG).show()
             }
@@ -277,7 +457,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 MaterialAlertDialogBuilder(this@MainActivity)
                     .setTitle("بازیابی داده")
-                    .setMessage("${data.transactions.size} تراکنش، ${data.notes.size} یادداشت، ${data.categories.size} کتگوری، ${data.folders.size} پوشه، ${data.foods.size} غذا، ${data.schedule.size} کلاس و ${data.priceHistory.size} قیمت در فایل پیدا شد. داده فعلی با این داده جایگزین می‌شود. ادامه می‌دهید؟")
+                    .setMessage("${data.transactions.size} تراکنش، ${data.notes.size} یادداشت، ${data.categories.size} کتگوری، ${data.folders.size} پوشه، ${data.foods.size} غذا، ${data.schedule.size} کلاس، ${data.priceHistory.size} قیمت و ${data.recurring.size} تکراری در فایل پیدا شد. داده فعلی با این داده جایگزین می‌شود. ادامه می‌دهید؟")
                     .setPositiveButton("بله") { _, _ ->
                         lifecycleScope.launch {
                             db.transactionDao().deleteAll()
@@ -294,7 +474,9 @@ class MainActivity : AppCompatActivity() {
                             db.scheduleDao().insertAll(data.schedule)
                             db.priceHistoryDao().deleteAll()
                             db.priceHistoryDao().insertAll(data.priceHistory)
-                            Toast.makeText(this@MainActivity, "بازیابی انجام شد (${data.transactions.size} تراکنش، ${data.notes.size} یادداشت، ${data.categories.size} کتگوری، ${data.folders.size} پوشه، ${data.foods.size} غذا، ${data.schedule.size} کلاس، ${data.priceHistory.size} قیمت)", Toast.LENGTH_LONG).show()
+                            db.recurringDao().deleteAll()
+                            db.recurringDao().insertAll(data.recurring)
+                            Toast.makeText(this@MainActivity, "بازیابی انجام شد (${data.transactions.size} تراکنش، ${data.notes.size} یادداشت، ${data.categories.size} کتگوری، ${data.folders.size} پوشه، ${data.foods.size} غذا، ${data.schedule.size} کلاس، ${data.priceHistory.size} قیمت، ${data.recurring.size} تکراری)", Toast.LENGTH_LONG).show()
                             loadData()
                             loadNote()
                         }
@@ -562,24 +744,52 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAddDialog(type: TransactionType) {
+        showAddDialog(type, null)
+    }
+
+    private fun showAddDialogToFolder(folder: com.pilltracker.data.Folder) {
+        showAddDialog(TransactionType.EXPENSE, folder)
+    }
+
+    private fun showAddDialog(type: TransactionType, preselectedFolder: com.pilltracker.data.Folder?) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_transaction, null)
         val titleInput = dialogView.findViewById<TextInputEditText>(R.id.titleInput)
         val amountInput = dialogView.findViewById<TextInputEditText>(R.id.amountInput)
         attachAmountFormatting(amountInput)
         val folderDropdown = dialogView.findViewById<AutoCompleteTextView>(R.id.folderDropdown)
         val categoryDropdown = dialogView.findViewById<AutoCompleteTextView>(R.id.categoryDropdown)
+        val recurringSwitch = dialogView.findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.recurringSwitch)
+        val recurringIntervalLayout = dialogView.findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.recurringIntervalLayout)
+        val recurringIntervalDropdown = dialogView.findViewById<AutoCompleteTextView>(R.id.recurringIntervalDropdown)
+
+        // Recurring interval selector (shown when switch is on)
+        val intervalOptions = arrayOf("ماهانه (هر ۳۰ روز)", "هفتگی (هر ۷ روز)", "هر ۲ هفته (۱۴ روز)", "سالیانه (۳۶۵ روز)")
+        val intervalValues = intArrayOf(30, 7, 14, 365)
+        var selectedIntervalDays = 30
+        recurringSwitch.setOnCheckedChangeListener { _, checked ->
+            recurringIntervalLayout.visibility = if (checked) View.VISIBLE else View.GONE
+        }
+        recurringIntervalDropdown.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, intervalOptions)
+        )
+        recurringIntervalDropdown.setText(intervalOptions[0], false)
+        recurringIntervalDropdown.setOnItemClickListener { _, _, position, _ ->
+            selectedIntervalDays = intervalValues[position]
+        }
 
         // Load daily folders (for the selected day) into the dropdown
         val folderNames = mutableListOf<String>()
         val folderIds = mutableListOf<Long>()
-        var selectedFolderId: Long? = null
+        var selectedFolderId: Long? = preselectedFolder?.id
         lifecycleScope.launch {
             val folders = db.folderDao().getFoldersForDateOnce(currentYear, currentMonth, currentDay)
             folderNames.clear()
             folderIds.clear()
+            var preselectedName = ""
             for (f in folders) {
                 folderNames.add(f.name)
                 folderIds.add(f.id)
+                if (f.id == preselectedFolder?.id) preselectedName = f.name
             }
             folderDropdown.setAdapter(
                 ArrayAdapter(
@@ -588,11 +798,19 @@ class MainActivity : AppCompatActivity() {
                     folderNames
                 )
             )
-            folderDropdown.setText("", false)
+            folderDropdown.setText(preselectedName, false)
         }
         folderDropdown.setOnItemClickListener { _, _, position, _ ->
             selectedFolderId = folderIds[position]
         }
+        // When the user clears the dropdown text (X button), reset the selection
+        folderDropdown.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                if (s.isNullOrEmpty()) selectedFolderId = null
+            }
+        })
 
         // Load categories into the dropdown
         val categoryNames = mutableListOf<String>()
@@ -618,6 +836,14 @@ class MainActivity : AppCompatActivity() {
         categoryDropdown.setOnItemClickListener { _, _, position, _ ->
             selectedCategoryId = categoryIds[position]
         }
+        // When the user clears the category dropdown text (X button), reset the selection
+        categoryDropdown.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                if (s.isNullOrEmpty()) selectedCategoryId = null
+            }
+        })
 
         val dialog = MaterialAlertDialogBuilder(this)
             .setTitle(if (type == TransactionType.EXPENSE) "افزودن هزینه" else "افزودن درآمد")
@@ -640,21 +866,41 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
+            val isRecurring = recurringSwitch.isChecked
             lifecycleScope.launch {
-                db.transactionDao().insert(
-                    Transaction(
-                        title = title,
-                        amount = amount,
-                        type = type,
-                        year = currentYear,
-                        month = currentMonth,
-                        day = currentDay,
-                        categoryId = selectedCategoryId,
-                        folderId = selectedFolderId
+                if (isRecurring) {
+                    db.recurringDao().insert(
+                        com.pilltracker.data.RecurringTransaction(
+                            title = title,
+                            amount = amount,
+                            type = type,
+                            categoryId = selectedCategoryId,
+                            intervalDays = selectedIntervalDays,
+                            anchorYear = currentYear,
+                            anchorMonth = currentMonth,
+                            anchorDay = currentDay,
+                            nextYear = currentYear,
+                            nextMonth = currentMonth,
+                            nextDay = currentDay
+                        )
                     )
-                )
-                loadTransactions()
-                loadSummary()
+                    Toast.makeText(this@MainActivity, "تراکنش تکراری فعال شد — از فردا به بعد هر بازه ثبت می‌شود", Toast.LENGTH_LONG).show()
+                } else {
+                    db.transactionDao().insert(
+                        Transaction(
+                            title = title,
+                            amount = amount,
+                            type = type,
+                            year = currentYear,
+                            month = currentMonth,
+                            day = currentDay,
+                            categoryId = selectedCategoryId,
+                            folderId = selectedFolderId
+                        )
+                    )
+                    loadTransactions()
+                    loadSummary()
+                }
             }
             dialog.dismiss()
         }
@@ -889,6 +1135,7 @@ class MainActivity : AppCompatActivity() {
         private val onDelete: (Transaction) -> Unit,
         private val onEdit: (Transaction) -> Unit,
         private val onDeleteFolder: (com.pilltracker.data.Folder) -> Unit,
+        private val onFolderClick: (com.pilltracker.data.Folder) -> Unit,
         private val categoryNames: () -> Map<Long, String>
     ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
@@ -949,6 +1196,9 @@ class MainActivity : AppCompatActivity() {
                     h.expenseTotal.text = if (item.expenseTotal > 0) "هزینه: ${FormatUtils.formatAmount(item.expenseTotal)}" else ""
                     h.incomeTotal.text = if (item.incomeTotal > 0) "درآمد: ${FormatUtils.formatAmount(item.incomeTotal)}" else ""
                     h.deleteBtn.setOnClickListener { onDeleteFolder(item.folder) }
+                    // Tap the folder name to add a transaction inside this folder
+                    h.itemView.setOnClickListener { onFolderClick(item.folder) }
+                    h.titleText.setOnClickListener { onFolderClick(item.folder) }
                 }
                 is DayItem.Tx -> {
                     val h = holder as TxHolder

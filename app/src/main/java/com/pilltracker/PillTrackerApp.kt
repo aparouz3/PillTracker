@@ -8,6 +8,8 @@ import androidx.work.WorkManager
 import com.pilltracker.data.PillTrackerDatabase
 import com.pilltracker.work.CrownsNotifier
 import com.pilltracker.work.DailyBackupWorker
+import com.pilltracker.work.DailyCrownsWorker
+import com.pilltracker.work.DailyRecurringWorker
 import com.pilltracker.work.PriceUpdateScheduler
 import java.io.File
 import java.io.FileWriter
@@ -26,7 +28,8 @@ class PillTrackerApp : Application() {
         installCrashHandler()
         scheduleDailyBackup()
         CrownsNotifier.ensureChannel(this)
-        CrownsNotifier.scheduleDaily(this)
+        DailyCrownsWorker.schedule(this)
+        DailyRecurringWorker.schedule(this)
         PriceUpdateScheduler.scheduleDaily(this)
     }
 

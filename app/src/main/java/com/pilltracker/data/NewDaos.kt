@@ -1,9 +1,11 @@
 package com.pilltracker.data
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 
 @Dao
 interface PriceHistoryDao {
@@ -24,6 +26,30 @@ interface PriceHistoryDao {
 
     @Query("SELECT * FROM price_history ORDER BY dateKey DESC LIMIT 30")
     suspend fun getRecent(): List<PriceHistory>
+}
+
+@Dao
+interface RecurringDao {
+    @Query("SELECT * FROM recurring_transactions WHERE active = 1 ORDER BY next_year, next_month, next_day")
+    suspend fun getAllActive(): List<RecurringTransaction>
+
+    @Query("SELECT * FROM recurring_transactions ORDER BY created_at DESC")
+    suspend fun getAll(): List<RecurringTransaction>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(entry: RecurringTransaction): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(entries: List<RecurringTransaction>)
+
+    @Query("DELETE FROM recurring_transactions")
+    suspend fun deleteAll()
+
+    @Delete
+    suspend fun delete(entry: RecurringTransaction)
+
+    @Update
+    suspend fun update(entry: RecurringTransaction)
 }
 
 @Dao

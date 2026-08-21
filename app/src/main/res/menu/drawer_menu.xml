@@ -21,6 +21,26 @@
         android:icon="@drawable/ic_crown"
         android:title="کرون‌ها" />
     <item
+        android:id="@+id/navRecurring"
+        android:icon="@android:drawable/ic_menu_rotate"
+        android:title="تراکنش‌های تکراری" />
+    <item
+        android:id="@+id/navSearch"
+        android:icon="@android:drawable/ic_menu_search"
+        android:title="جستجوی تراکنش" />
+    <item
+        android:id="@+id/navExportCsv"
+        android:icon="@android:drawable/ic_menu_share"
+        android:title="خروجی CSV" />
+    <item
+        android:id="@+id/navExportXls"
+        android:icon="@android:drawable/ic_menu_share"
+        android:title="خروجی Excel" />
+    <item
+        android:id="@+id/navPinLock"
+        android:icon="@android:drawable/ic_lock_lock"
+        android:title="قفل برنامه (پین)" />
+    <item
         android:id="@+id/navBackup"
         android:icon="@drawable/ic_backup"
         android:title="بکاپ‌گیری (خروجی داده)" />

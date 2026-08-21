@@ -4,6 +4,7 @@ import com.pilltracker.data.Category
 import com.pilltracker.data.DailyNote
 import com.pilltracker.data.Food
 import com.pilltracker.data.PriceHistory
+import com.pilltracker.data.RecurringTransaction
 import com.pilltracker.data.ScheduleEntry
 import com.pilltracker.data.Transaction
 import com.pilltracker.data.TransactionType
@@ -13,8 +14,9 @@ import java.io.OutputStream
 
 /**
  * Shared backup logic: builds/parses the JSON backup format.
- * Format v5: { version, exportedAt, transactions: [...], notes: [...], categories: [...],
- *             folders: [...], foods: [...], schedule: [...], priceHistory: [...] }
+ * Format v6: { version, exportedAt, transactions: [...], notes: [...], categories: [...],
+ *             folders: [...], foods: [...], schedule: [...], priceHistory: [...],
+ *             recurring: [...] }
  */
 object BackupUtils {
 
@@ -25,10 +27,11 @@ object BackupUtils {
         folders: List<com.pilltracker.data.Folder>,
         foods: List<Food> = emptyList(),
         schedule: List<ScheduleEntry> = emptyList(),
-        priceHistory: List<PriceHistory> = emptyList()
+        priceHistory: List<PriceHistory> = emptyList(),
+        recurring: List<RecurringTransaction> = emptyList()
     ): String {
         return JSONObject().apply {
-            put("version", 5)
+            put("version", 6)
             put("exportedAt", System.currentTimeMillis())
             put("transactions", JSONArray().apply {
                 for (t in transactions) {
@@ -120,6 +123,28 @@ object BackupUtils {
                     )
                 }
             })
+            put("recurring", JSONArray().apply {
+                for (r in recurring) {
+                    put(
+                        JSONObject().apply {
+                            put("id", r.id)
+                            put("title", r.title)
+                            put("amount", r.amount)
+                            put("type", r.type.name)
+                            if (r.categoryId != null) put("categoryId", r.categoryId)
+                            put("intervalDays", r.intervalDays)
+                            put("anchorYear", r.anchorYear)
+                            put("anchorMonth", r.anchorMonth)
+                            put("anchorDay", r.anchorDay)
+                            put("active", r.active)
+                            put("nextYear", r.nextYear)
+                            put("nextMonth", r.nextMonth)
+                            put("nextDay", r.nextDay)
+                            put("createdAt", r.createdAt)
+                        }
+                    )
+                }
+            })
         }.toString(2)
     }
 
@@ -131,10 +156,11 @@ object BackupUtils {
         foods: List<Food> = emptyList(),
         schedule: List<ScheduleEntry> = emptyList(),
         priceHistory: List<PriceHistory> = emptyList(),
+        recurring: List<RecurringTransaction> = emptyList(),
         out: OutputStream
     ) {
         out.write(
-            buildBackupJson(transactions, notes, categories, folders, foods, schedule, priceHistory)
+            buildBackupJson(transactions, notes, categories, folders, foods, schedule, priceHistory, recurring)
                 .toByteArray(Charsets.UTF_8)
         )
     }
@@ -146,7 +172,8 @@ object BackupUtils {
         val folders: List<com.pilltracker.data.Folder>,
         val foods: List<Food> = emptyList(),
         val schedule: List<ScheduleEntry> = emptyList(),
-        val priceHistory: List<PriceHistory> = emptyList()
+        val priceHistory: List<PriceHistory> = emptyList(),
+        val recurring: List<RecurringTransaction> = emptyList()
     )
 
     fun parseBackup(text: String): BackupData {
@@ -260,6 +287,31 @@ object BackupUtils {
                 )
             }
         }
-        return BackupData(transactions, notes, categories, folders, foods, schedule, priceHistory)
+        val recurring = mutableListOf<RecurringTransaction>()
+        if (json.has("recurring")) {
+            val rArr = json.getJSONArray("recurring")
+            for (i in 0 until rArr.length()) {
+                val o = rArr.getJSONObject(i)
+                recurring.add(
+                    RecurringTransaction(
+                        id = o.optLong("id", 0),
+                        title = o.optString("title", ""),
+                        amount = o.optLong("amount", 0),
+                        type = if (o.optString("type") == "INCOME") TransactionType.INCOME else TransactionType.EXPENSE,
+                        categoryId = if (o.has("categoryId")) o.optLong("categoryId") else null,
+                        intervalDays = o.optInt("intervalDays", 30),
+                        anchorYear = o.optInt("anchorYear", 0),
+                        anchorMonth = o.optInt("anchorMonth", 0),
+                        anchorDay = o.optInt("anchorDay", 0),
+                        active = o.optBoolean("active", true),
+                        nextYear = o.optInt("nextYear", 0),
+                        nextMonth = o.optInt("nextMonth", 0),
+                        nextDay = o.optInt("nextDay", 0),
+                        createdAt = o.optLong("createdAt", System.currentTimeMillis())
+                    )
+                )
+            }
+        }
+        return BackupData(transactions, notes, categories, folders, foods, schedule, priceHistory, recurring)
     }
 }
